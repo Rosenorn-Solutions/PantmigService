@@ -1,0 +1,37 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36401.2
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PantmigService", "PantmigService\PantmigService.csproj", "{1D2C4244-80D5-4E54-84F2-460191950599}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AuthService", "AuthService\AuthService.csproj", "{6CDAB7B3-DE4F-6FF5-06F0-D824F083F1AF}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "PantMigTesting", "PantMigTesting\PantMigTesting.csproj", "{EBB0032B-8856-42B4-B355-179A642AE6B8}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{1D2C4244-80D5-4E54-84F2-460191950599}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1D2C4244-80D5-4E54-84F2-460191950599}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1D2C4244-80D5-4E54-84F2-460191950599}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1D2C4244-80D5-4E54-84F2-460191950599}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6CDAB7B3-DE4F-6FF5-06F0-D824F083F1AF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6CDAB7B3-DE4F-6FF5-06F0-D824F083F1AF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6CDAB7B3-DE4F-6FF5-06F0-D824F083F1AF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6CDAB7B3-DE4F-6FF5-06F0-D824F083F1AF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EBB0032B-8856-42B4-B355-179A642AE6B8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EBB0032B-8856-42B4-B355-179A642AE6B8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EBB0032B-8856-42B4-B355-179A642AE6B8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EBB0032B-8856-42B4-B355-179A642AE6B8}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {9E1BE695-3099-4781-A6D5-FB51939BB301}
+	EndGlobalSection
+EndGlobal
