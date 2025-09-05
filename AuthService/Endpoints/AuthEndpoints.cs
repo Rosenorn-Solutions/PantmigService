@@ -16,10 +16,24 @@ namespace AuthService.Endpoints
         {
             var group = app.MapGroup("/auth").WithTags("Auth");
 
-            group.MapPost("/register", async (RegisterRequest req, UserManager<ApplicationUser> userManager, ITokenService tokenService) =>
+            group.MapPost("/register", async (RegisterRequest req, UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager, ITokenService tokenService) =>
             {
                 if (string.IsNullOrWhiteSpace(req.Email) || string.IsNullOrWhiteSpace(req.Password))
                     return Results.BadRequest(new RegisterResult { Success = false, ErrorMessage = "Email and password are required" });
+
+                // Ensure roles exist
+                foreach (var roleName in new[] { nameof(UserType.Donator), nameof(UserType.Recycler) })
+                {
+                    if (!await roleManager.RoleExistsAsync(roleName))
+                    {
+                        var createRes = await roleManager.CreateAsync(new IdentityRole(roleName));
+                        if (!createRes.Succeeded)
+                        {
+                            var errors = string.Join("; ", createRes.Errors.Select(e => e.Description));
+                            return Results.BadRequest(new RegisterResult { Success = false, ErrorMessage = $"Failed to ensure role '{roleName}': {errors}" });
+                        }
+                    }
+                }
 
                 var user = new ApplicationUser
                 {
@@ -29,7 +43,8 @@ namespace AuthService.Endpoints
                     LastName = req.LastName,
                     PhoneNumber = req.Phone,
                     MitId = req.MitId,
-                    IsMitIdVerified = !string.IsNullOrEmpty(req.MitId) // naive demo rule
+                    IsMitIdVerified = !string.IsNullOrEmpty(req.MitId), // naive demo rule
+                    UserType = req.UserType
                 };
 
                 var create = await userManager.CreateAsync(user, req.Password);
@@ -37,6 +52,14 @@ namespace AuthService.Endpoints
                 {
                     var errors = string.Join("; ", create.Errors.Select(e => e.Description));
                     return Results.BadRequest(new RegisterResult { Success = false, ErrorMessage = errors });
+                }
+
+                // Add role to user based on UserType
+                var roleAdd = await userManager.AddToRoleAsync(user, req.UserType.ToString());
+                if (!roleAdd.Succeeded)
+                {
+                    var errors = string.Join("; ", roleAdd.Errors.Select(e => e.Description));
+                    return Results.BadRequest(new RegisterResult { Success = false, ErrorMessage = $"Failed to assign role: {errors}" });
                 }
 
                 var (access, exp) = tokenService.GenerateAccessToken(user);
@@ -50,7 +73,8 @@ namespace AuthService.Endpoints
                     LastName = user.LastName,
                     AccessToken = access,
                     AccessTokenExpiration = exp,
-                    RefreshToken = refresh
+                    RefreshToken = refresh,
+                    UserType = user.UserType
                 };
                 return Results.Ok(new RegisterResult { Success = true, AuthResponse = resp });
             })
@@ -86,7 +110,8 @@ namespace AuthService.Endpoints
                     LastName = user.LastName,
                     AccessToken = access,
                     AccessTokenExpiration = exp,
-                    RefreshToken = refresh
+                    RefreshToken = refresh,
+                    UserType = user.UserType
                 };
 
                 return Results.Ok(new LoginResult { Success = true, AuthResponse = resp });

@@ -11,5 +11,7 @@
         public DateTime AccessTokenExpiration { get; set; }
         public string? LinkedInId { get; set; }
         public string? FindJobNuUri { get; set; }
+        // New: echo back assigned role
+        public UserType UserType { get; set; }
     }
 }

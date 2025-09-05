@@ -75,7 +75,20 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-builder.Services.AddAuthorization();
+builder.Services.AddAuthorization(options =>
+{
+    // Optional: policy that mirrors the test policy using role claim
+    options.AddPolicy("VerifiedDonator", policy =>
+    {
+        policy.RequireAuthenticatedUser();
+        policy.RequireRole(nameof(UserType.Donator));
+        //policy.RequireAssertion(ctx =>
+        //{
+        //    var verified = ctx.User.FindFirst("isMitIdVerified")?.Value;
+        //    return string.Equals(verified, bool.TrueString, StringComparison.OrdinalIgnoreCase);
+        //});
+    });
+});
 builder.Services.AddHttpClient();
 builder.Services.AddEndpointsApiExplorer();
 
@@ -173,6 +186,19 @@ builder.Services.AddCors(options =>
 builder.Services.AddScoped<ITokenService, TokenService>();
 
 var app = builder.Build();
+
+// Seed Identity roles on startup
+using (var scope = app.Services.CreateScope())
+{
+    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+    foreach (var roleName in new[] { nameof(UserType.Donator), nameof(UserType.Recycler) })
+    {
+        if (!await roleManager.RoleExistsAsync(roleName))
+        {
+            await roleManager.CreateAsync(new IdentityRole(roleName));
+        }
+    }
+}
 
 app.UseForwardedHeaders(new ForwardedHeadersOptions
 {

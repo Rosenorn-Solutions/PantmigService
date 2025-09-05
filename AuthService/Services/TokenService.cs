@@ -41,7 +41,9 @@ namespace AuthService.Services
                 new(ClaimTypes.Surname, user.LastName ?? string.Empty),
                 new(ClaimTypes.MobilePhone, user.PhoneNumber ?? string.Empty),
                 new("userType", user.UserType.ToString()),
-                new("isMitIdVerified", user.IsMitIdVerified.ToString())
+                new("isMitIdVerified", user.IsMitIdVerified.ToString()),
+                // New: standard role claim so [Authorize(Roles = ...)] works
+                new(ClaimTypes.Role, user.UserType.ToString())
             };
 
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
@@ -115,7 +117,8 @@ namespace AuthService.Services
                 LastName = user.LastName,
                 AccessToken = newAccess,
                 AccessTokenExpiration = exp,
-                RefreshToken = newRefresh
+                RefreshToken = newRefresh,
+                UserType = user.UserType
             };
 
             return (resp, null);

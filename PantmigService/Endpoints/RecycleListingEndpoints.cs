@@ -63,7 +63,6 @@ namespace PantmigService.Endpoints
                 {
                     Title = req.Title,
                     Description = req.Description,
-                    Location = req.Location ?? req.City ?? string.Empty,
                     EstimatedValue = req.EstimatedValue,
                     EstimatedAmount = req.EstimatedAmount,
                     AvailableFrom = req.AvailableFrom,

@@ -11,6 +11,7 @@ using Microsoft.EntityFrameworkCore;
 using Serilog;
 using PantmigService.Hubs;
 using PantmigService.Seed;
+using System.Linq;
 
 namespace PantmigService
 {
@@ -45,10 +46,42 @@ namespace PantmigService
                     policy.RequireAssertion(ctx =>
                     {
                         var type = ctx.User.FindFirst("userType")?.Value;
-                        var verified = ctx.User.FindFirst("isMitIdVerified")?.Value;
-                        return string.Equals(type, "Donator", StringComparison.OrdinalIgnoreCase)
-                               && string.Equals(verified, bool.TrueString, StringComparison.OrdinalIgnoreCase);
+                        //var verified = ctx.User.FindFirst("isMitIdVerified")?.Value;
+                        return string.Equals(type, "Donator", StringComparison.OrdinalIgnoreCase);
+                               //&& string.Equals(verified, bool.TrueString, StringComparison.OrdinalIgnoreCase);
                     });
+                });
+            });
+
+            // CORS to allow front-end origins from configuration
+            var allowedOrigins = builder.Configuration
+                .GetSection("Cors:AllowedOrigins")
+                .GetChildren()
+                .Select(c => c.Value)
+                .Where(v => !string.IsNullOrWhiteSpace(v))
+                .Cast<string>()
+                .ToArray();
+
+            if (allowedOrigins.Length == 0)
+            {
+                // Sensible defaults for local dev
+                allowedOrigins = new[]
+                {
+                    "http://localhost:8081",
+                    "https://localhost:8081",
+                    "http://127.0.0.1:8081",
+                    "https://127.0.0.1:8081"
+                };
+            }
+
+            builder.Services.AddCors(options =>
+            {
+                options.AddPolicy("FrontendCors", policy =>
+                {
+                    policy.WithOrigins(allowedOrigins)
+                          .AllowAnyHeader()
+                          .AllowAnyMethod()
+                          .AllowCredentials();
                 });
             });
 
@@ -162,6 +195,9 @@ namespace PantmigService
             }
 
             app.UseHttpsRedirection();
+
+            // Enable CORS early to handle preflight requests
+            app.UseCors("FrontendCors");
 
             app.UseAuthentication();
             app.UseAuthorization();
