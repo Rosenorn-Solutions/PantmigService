@@ -7,59 +7,58 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.OpenApi;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
+using System.Text;
+using System.Globalization;
+using System.Security.Cryptography;
 
 namespace AuthService.Endpoints
 {
     public static class AuthEndpoints
     {
+        private static TimeSpan GetRatingTtl(IConfiguration config)
+        {
+            var seconds = config.GetSection("Cache")["UserRatingSeconds"];
+            return TimeSpan.FromSeconds(int.TryParse(seconds, out var s) ? Math.Max(s, 1) : 300);
+        }
+
         public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder app)
         {
             var group = app.MapGroup("/auth").WithTags("Auth");
 
-            group.MapPost("/register", async (RegisterRequest req, UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager, ITokenService tokenService) =>
+            group.MapPost("/register", async (RegisterRequest req, UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager, ITokenService tokenService, 
+                ICityResolver cityResolver, 
+                IConfiguration config, 
+                IUsernameGenerator usernameGenerator, 
+                IAuthService authService) =>
             {
                 if (string.IsNullOrWhiteSpace(req.Email) || string.IsNullOrWhiteSpace(req.Password))
                     return Results.BadRequest(new RegisterResult { Success = false, ErrorMessage = "Email and password are required" });
 
-                // Ensure roles exist
-                foreach (var roleName in new[] { nameof(UserType.Donator), nameof(UserType.Recycler) })
+                int? cityId = null;
+                string? cityName = null;
+                if (!string.IsNullOrWhiteSpace(req.City))
                 {
-                    if (!await roleManager.RoleExistsAsync(roleName))
+                    try
                     {
-                        var createRes = await roleManager.CreateAsync(new IdentityRole(roleName));
-                        if (!createRes.Succeeded)
-                        {
-                            var errors = string.Join("; ", createRes.Errors.Select(e => e.Description));
-                            return Results.BadRequest(new RegisterResult { Success = false, ErrorMessage = $"Failed to ensure role '{roleName}': {errors}" });
-                        }
+                        cityId = await cityResolver.ResolveOrCreateAsync(req.City);
+                        cityName = req.City.Trim();
+                    }
+                    catch (Exception ex)
+                    {
+                        return Results.BadRequest(new RegisterResult { Success = false, ErrorMessage = $"Invalid city: {ex.Message}" });
                     }
                 }
 
-                var user = new ApplicationUser
+                var (ok, err, user) = await authService.RegisterAsync(req, cityId, userManager, roleManager, tokenService, usernameGenerator);
+                if (!ok || user is null)
                 {
-                    UserName = req.Email,
-                    Email = req.Email,
-                    FirstName = req.FirstName,
-                    LastName = req.LastName,
-                    PhoneNumber = req.Phone,
-                    MitId = req.MitId,
-                    IsMitIdVerified = !string.IsNullOrEmpty(req.MitId), // naive demo rule
-                    UserType = req.UserType
-                };
-
-                var create = await userManager.CreateAsync(user, req.Password);
-                if (!create.Succeeded)
-                {
-                    var errors = string.Join("; ", create.Errors.Select(e => e.Description));
-                    return Results.BadRequest(new RegisterResult { Success = false, ErrorMessage = errors });
+                    return Results.BadRequest(new RegisterResult { Success = false, ErrorMessage = err ?? "Registration failed" });
                 }
 
-                // Add role to user based on UserType
-                var roleAdd = await userManager.AddToRoleAsync(user, req.UserType.ToString());
-                if (!roleAdd.Succeeded)
+                if (cityId.HasValue)
                 {
-                    var errors = string.Join("; ", roleAdd.Errors.Select(e => e.Description));
-                    return Results.BadRequest(new RegisterResult { Success = false, ErrorMessage = $"Failed to assign role: {errors}" });
+                    user = await userManager.Users.Include(u => u.City).FirstAsync(u => u.Id == user.Id);
                 }
 
                 var (access, exp) = tokenService.GenerateAccessToken(user);
@@ -69,12 +68,15 @@ namespace AuthService.Endpoints
                 {
                     UserId = user.Id,
                     Email = user.Email!,
+                    UserName = user.UserName!,
                     FirstName = user.FirstName,
                     LastName = user.LastName,
                     AccessToken = access,
                     AccessTokenExpiration = exp,
                     RefreshToken = refresh,
-                    UserType = user.UserType
+                    UserType = user.UserType,
+                    CityId = user.CityId,
+                    CityName = cityName ?? user.City?.Name
                 };
                 return Results.Ok(new RegisterResult { Success = true, AuthResponse = resp });
             })
@@ -89,14 +91,11 @@ namespace AuthService.Endpoints
             .Produces<RegisterResult>(StatusCodes.Status200OK, contentType: "application/json")
             .Produces<RegisterResult>(StatusCodes.Status400BadRequest, contentType: "application/json");
 
-            group.MapPost("/login", async (LoginRequest req, SignInManager<ApplicationUser> signInManager, UserManager<ApplicationUser> userManager, ITokenService tokenService) =>
+            group.MapPost("/login", async (LoginRequest req, SignInManager<ApplicationUser> signInManager, UserManager<ApplicationUser> userManager, ITokenService tokenService,
+                IAuthService authService) =>
             {
-                var user = await userManager.Users.FirstOrDefaultAsync(u => u.Email == req.Email);
-                if (user == null)
-                    return Results.Unauthorized();
-
-                var result = await signInManager.CheckPasswordSignInAsync(user, req.Password, lockoutOnFailure: true);
-                if (!result.Succeeded)
+                var (ok, _, user) = await authService.LoginAsync(req, signInManager, userManager);
+                if (!ok || user is null)
                     return Results.Unauthorized();
 
                 var (access, exp) = tokenService.GenerateAccessToken(user);
@@ -106,12 +105,15 @@ namespace AuthService.Endpoints
                 {
                     UserId = user.Id,
                     Email = user.Email!,
+                    UserName = user.UserName!,
                     FirstName = user.FirstName,
                     LastName = user.LastName,
                     AccessToken = access,
                     AccessTokenExpiration = exp,
                     RefreshToken = refresh,
-                    UserType = user.UserType
+                    UserType = user.UserType,
+                    CityId = user.CityId,
+                    CityName = user.City?.Name
                 };
 
                 return Results.Ok(new LoginResult { Success = true, AuthResponse = resp });
@@ -120,8 +122,8 @@ namespace AuthService.Endpoints
             .WithOpenApi(op =>
             {
                 op.OperationId = "Auth_Login";
-                op.Summary = "Login with email and password";
-                op.Description = "Authenticates a user and returns access and refresh tokens.";
+                op.Summary = "Login with email/username and password";
+                op.Description = "Authenticates a user with either email or username and returns access and refresh tokens.";
                 return op;
             })
             .Produces<LoginResult>(StatusCodes.Status200OK, contentType: "application/json")
@@ -143,16 +145,47 @@ namespace AuthService.Endpoints
             .Produces<AuthResponse>(StatusCodes.Status200OK, contentType: "application/json")
             .Produces(StatusCodes.Status400BadRequest);
 
-            group.MapGet("/me", (ClaimsPrincipal user) =>
+            group.MapGet("/me", async (ClaimsPrincipal user, ApplicationDbContext db, IMemoryCache cache, IConfiguration config) =>
             {
                 if (!user.Identity?.IsAuthenticated ?? true) return Results.Unauthorized();
+
+                int? cityId = null;
+                string? cityName = null;
+
+                var cityIdClaim = user.FindFirst("cityId")?.Value;
+                if (int.TryParse(cityIdClaim, out var cid)) cityId = cid;
+                cityName = user.FindFirst("cityName")?.Value;
+
+                var userId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub") ?? string.Empty;
+
+                decimal rating = 0m;
+                if (!string.IsNullOrEmpty(userId))
+                {
+                    var key = $"rating:{userId}";
+                    if (!cache.TryGetValue(key, out rating))
+                    {
+                        rating = await db.Users.Where(u => u.Id == userId).Select(u => u.Rating).FirstOrDefaultAsync();
+                        cache.Set(key, rating, GetRatingTtl(config));
+                    }
+                }
+
+                if (cityId.HasValue && string.IsNullOrWhiteSpace(cityName))
+                {
+                    cityName = await db.Cities.Where(c => c.Id == cityId.Value)
+                                              .Select(c => c.Name)
+                                              .FirstOrDefaultAsync();
+                }
+
                 var dto = new UserInformationDTO
                 {
-                    Id = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub") ?? string.Empty,
+                    Id = userId,
                     Email = user.FindFirstValue(ClaimTypes.Email) ?? string.Empty,
                     UserName = user.Identity?.Name ?? string.Empty,
                     FirstName = user.FindFirstValue(ClaimTypes.GivenName) ?? string.Empty,
                     LastName = user.FindFirstValue(ClaimTypes.Surname) ?? string.Empty,
+                    CityId = cityId,
+                    CityName = cityName,
+                    Rating = rating
                 };
                 return Results.Ok(dto);
             })
@@ -166,6 +199,106 @@ namespace AuthService.Endpoints
             })
             .Produces<UserInformationDTO>(StatusCodes.Status200OK, contentType: "application/json")
             .Produces(StatusCodes.Status401Unauthorized);
+
+            // Public endpoint to get user info by id (for cross-service lookup)
+            group.MapGet("/users/{id}", async (string id, ApplicationDbContext db, IMemoryCache cache, IConfiguration config) =>
+            {
+                var user = await db.Users.Include(u => u.City).AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
+                if (user is null) return Results.NotFound();
+
+                // cache rating
+                var key = $"rating:{user.Id}";
+                cache.Set(key, user.Rating, GetRatingTtl(config));
+
+                var dto = new UserInformationDTO
+                {
+                    Id = user.Id,
+                    Email = user.Email ?? string.Empty,
+                    UserName = user.UserName ?? string.Empty,
+                    FirstName = user.FirstName,
+                    LastName = user.LastName,
+                    Phone = user.PhoneNumber ?? string.Empty,
+                    CreatedAt = user.CreatedAt,
+                    CityId = user.CityId,
+                    CityName = user.City?.Name,
+                    Rating = user.Rating
+                };
+                return Results.Ok(new UserInformationResult { Success = true, UserInformation = dto });
+            })
+            .WithOpenApi(op =>
+            {
+                op.OperationId = "Auth_GetUserById";
+                op.Summary = "Get user info by id";
+                op.Description = "Returns public profile information for a user, including rating.";
+                return op;
+            })
+            .Produces<UserInformationResult>(StatusCodes.Status200OK, contentType: "application/json")
+            .Produces(StatusCodes.Status404NotFound);
+
+            // Batch lookup endpoint to resolve multiple users' ratings at once
+            group.MapPost("/users/lookup", async (UsersLookupRequest req, ApplicationDbContext db, IMemoryCache cache, IConfiguration config) =>
+            {
+                if (req?.Ids == null || req.Ids.Count == 0)
+                {
+                    return Results.Ok(new UsersLookupResult { Success = true, Users = new List<UserRatingDTO>() });
+                }
+
+                // Sanitize: unique and non-empty ids
+                var ids = req.Ids.Where(id => !string.IsNullOrWhiteSpace(id)).Distinct().ToList();
+                if (ids.Count == 0)
+                {
+                    return Results.Ok(new UsersLookupResult { Success = true, Users = new List<UserRatingDTO>() });
+                }
+
+                // Preload usernames for all requested ids
+                var nameMap = await db.Users.AsNoTracking()
+                    .Where(u => ids.Contains(u.Id))
+                    .Select(u => new { u.Id, u.UserName })
+                    .ToDictionaryAsync(x => x.Id, x => x.UserName ?? string.Empty);
+
+                var users = new List<UserRatingDTO>(ids.Count);
+                var missing = new List<string>();
+                foreach (var id in ids)
+                {
+                    var cacheKey = $"rating:{id}";
+                    if (cache.TryGetValue(cacheKey, out decimal r))
+                    {
+                        var name = nameMap.TryGetValue(id, out var n) ? n : string.Empty;
+                        users.Add(new UserRatingDTO { Id = id, UserName = name, Rating = r });
+                    }
+                    else
+                    {
+                        missing.Add(id);
+                    }
+                }
+
+                if (missing.Count > 0)
+                {
+                    var fromDb = await db.Users.AsNoTracking()
+                        .Where(u => missing.Contains(u.Id))
+                        .Select(u => new { u.Id, u.Rating })
+                        .ToListAsync();
+
+                    var ttl = GetRatingTtl(config);
+                    foreach (var u in fromDb)
+                    {
+                        cache.Set($"rating:{u.Id}", u.Rating, ttl);
+                        var name = nameMap.TryGetValue(u.Id, out var n) ? n : string.Empty;
+                        users.Add(new UserRatingDTO { Id = u.Id, UserName = name, Rating = u.Rating });
+                    }
+                }
+
+                return Results.Ok(new UsersLookupResult { Success = true, Users = users });
+            })
+            .Accepts<UsersLookupRequest>("application/json")
+            .WithOpenApi(op =>
+            {
+                op.OperationId = "Auth_UsersLookup";
+                op.Summary = "Batch lookup users' ratings";
+                op.Description = "Returns ratings for a list of user ids to reduce round-trips. Uses in-memory cache for faster responses.";
+                return op;
+            })
+            .Produces<UsersLookupResult>(StatusCodes.Status200OK, contentType: "application/json");
 
             return app;
         }

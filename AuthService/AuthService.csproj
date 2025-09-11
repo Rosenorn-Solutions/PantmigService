@@ -31,7 +31,14 @@
 
   <ItemGroup>
     <Folder Include="Helpers\" />
+    <Folder Include="Migrations\" />
     <Folder Include="wwwroot\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="postal_codes_da.csv" Condition="Exists('postal_codes_da.csv')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>

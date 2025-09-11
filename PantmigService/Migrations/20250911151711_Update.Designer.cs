@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PantmigService.Data;
 
@@ -11,9 +12,11 @@ using PantmigService.Data;
 namespace PantmigService.Migrations
 {
     [DbContext(typeof(PantmigDbContext))]
-    partial class PantmigDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250911151711_Update")]
+    partial class Update
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

@@ -1,12 +1,12 @@
 using System;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using PantmigService.Data;
 using PantmigService.Entities;
 using PantmigService.Services;
 using Xunit;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace PantMigTesting.Services
 {
@@ -20,7 +20,7 @@ namespace PantMigTesting.Services
             return new PantmigDbContext(options);
         }
 
-        private static RecycleListingService CreateService(PantmigDbContext db) => new(db);
+        private static RecycleListingService CreateService(PantmigDbContext db) => new(db, NullLogger<RecycleListingService>.Instance);
 
         private static RecycleListing NewListing(string donatorId = "donator-1", DateTime? createdAt = null, bool isActive = true, ListingStatus status = ListingStatus.Created)
             => new()
@@ -28,8 +28,8 @@ namespace PantMigTesting.Services
                 Title = "Cans",
                 Description = "Bag of cans",
                 Location = "Copenhagen",
-                EstimatedValue = null,
-                EstimatedAmount = 50m,
+                EstimatedValue = null, // now decimal?
+                EstimatedAmount = "50", // now string?
                 AvailableFrom = DateTime.UtcNow.AddHours(-1),
                 AvailableTo = DateTime.UtcNow.AddHours(2),
                 CreatedByUserId = donatorId,
@@ -84,17 +84,21 @@ namespace PantMigTesting.Services
             using var db = CreateDb();
             var svc = CreateService(db);
 
+            //Show
             var older = await svc.CreateAsync(NewListing(createdAt: DateTime.UtcNow.AddHours(-3)));
             var newest = await svc.CreateAsync(NewListing(createdAt: DateTime.UtcNow));
-            // Inactive and non-Created should be filtered out
+            var pending = await svc.CreateAsync(NewListing(status: ListingStatus.PendingAcceptance, createdAt: DateTime.UtcNow.AddHours(-2)));
+            
+            //Don't show
             await svc.CreateAsync(NewListing(isActive: false));
-            await svc.CreateAsync(NewListing(status: ListingStatus.PendingAcceptance));
+            await svc.CreateAsync(NewListing(status: ListingStatus.Completed));
 
             var actives = (await svc.GetActiveAsync()).ToList();
 
-            Assert.Equal(2, actives.Count);
+            Assert.Equal(3, actives.Count);
             Assert.Equal(newest.Id, actives[0].Id);
-            Assert.Equal(older.Id, actives[1].Id);
+            Assert.Equal(pending.Id, actives[1].Id);
+            Assert.Equal(older.Id, actives[2].Id);
         }
 
         [Fact]
@@ -107,9 +111,10 @@ namespace PantMigTesting.Services
             var ok = await svc.RequestPickupAsync(listing.Id, "recycler-1");
 
             Assert.True(ok);
-            var fromDb = await db.RecycleListings.FindAsync(listing.Id);
+            var fromDb = await db.RecycleListings.Include(l => l.Applicants).FirstAsync(x => x.Id == listing.Id);
             Assert.Equal(ListingStatus.PendingAcceptance, fromDb!.Status);
-            Assert.Equal("recycler-1", fromDb.AssignedRecyclerUserId);
+            Assert.Null(fromDb.AssignedRecyclerUserId);
+            Assert.Contains(fromDb.Applicants, a => a.RecyclerUserId == "recycler-1");
         }
 
         [Theory]
@@ -134,7 +139,7 @@ namespace PantMigTesting.Services
             var listing = await svc.CreateAsync(NewListing());
             await svc.RequestPickupAsync(listing.Id, "recycler-1");
 
-            var ok = await svc.AcceptPickupAsync(listing.Id, listing.CreatedByUserId);
+            var ok = await svc.AcceptPickupAsync(listing.Id, listing.CreatedByUserId, "recycler-1");
 
             Assert.True(ok);
             var fromDb = await db.RecycleListings.FindAsync(listing.Id);
@@ -150,7 +155,7 @@ namespace PantMigTesting.Services
             var listing = await svc.CreateAsync(NewListing(donatorId: "donator-1"));
             await svc.RequestPickupAsync(listing.Id, "recycler-1");
 
-            var ok = await svc.AcceptPickupAsync(listing.Id, "someone-else");
+            var ok = await svc.AcceptPickupAsync(listing.Id, "someone-else", "recycler-1");
 
             Assert.False(ok);
         }
@@ -162,7 +167,7 @@ namespace PantMigTesting.Services
             var svc = CreateService(db);
             var listing = await svc.CreateAsync(NewListing());
             await svc.RequestPickupAsync(listing.Id, "recycler-1");
-            await svc.AcceptPickupAsync(listing.Id, listing.CreatedByUserId);
+            await svc.AcceptPickupAsync(listing.Id, listing.CreatedByUserId, "recycler-1");
 
             var ok = await svc.StartChatAsync(listing.Id, "chat-123");
 
@@ -190,7 +195,7 @@ namespace PantMigTesting.Services
             var svc = CreateService(db);
             var listing = await svc.CreateAsync(NewListing(donatorId: "donator-1"));
             await svc.RequestPickupAsync(listing.Id, "recycler-1");
-            await svc.AcceptPickupAsync(listing.Id, "donator-1");
+            await svc.AcceptPickupAsync(listing.Id, "donator-1", "recycler-1");
             await svc.StartChatAsync(listing.Id, "chat-1");
 
             var ok = await svc.SetMeetingPointAsync(listing.Id, "donator-1", 55.6761m, 12.5683m);
@@ -209,7 +214,7 @@ namespace PantMigTesting.Services
             var svc = CreateService(db);
             var listing = await svc.CreateAsync(NewListing(donatorId: "donator-1"));
             await svc.RequestPickupAsync(listing.Id, "recycler-1");
-            await svc.AcceptPickupAsync(listing.Id, "donator-1");
+            await svc.AcceptPickupAsync(listing.Id, "donator-1", "recycler-1");
 
             // No chat yet
             var okNoChat = await svc.SetMeetingPointAsync(listing.Id, "donator-1", 10m, 10m);
@@ -228,7 +233,7 @@ namespace PantMigTesting.Services
             var svc = CreateService(db);
             var listing = await svc.CreateAsync(NewListing(donatorId: "donator-1"));
             await svc.RequestPickupAsync(listing.Id, "recycler-1");
-            await svc.AcceptPickupAsync(listing.Id, "donator-1");
+            await svc.AcceptPickupAsync(listing.Id, "donator-1", "recycler-1");
             await svc.StartChatAsync(listing.Id, "chat-1");
 
             Assert.False(await svc.SetMeetingPointAsync(listing.Id, "donator-1", -91m, 0m));
@@ -242,7 +247,7 @@ namespace PantMigTesting.Services
             var svc = CreateService(db);
             var listing = await svc.CreateAsync(NewListing());
             await svc.RequestPickupAsync(listing.Id, "recycler-1");
-            await svc.AcceptPickupAsync(listing.Id, listing.CreatedByUserId);
+            await svc.AcceptPickupAsync(listing.Id, listing.CreatedByUserId, "recycler-1");
 
             var ok = await svc.ConfirmPickupAsync(listing.Id, "recycler-1");
 
@@ -259,7 +264,7 @@ namespace PantMigTesting.Services
             var svc = CreateService(db);
             var listing = await svc.CreateAsync(NewListing());
             await svc.RequestPickupAsync(listing.Id, "recycler-1");
-            await svc.AcceptPickupAsync(listing.Id, listing.CreatedByUserId);
+            await svc.AcceptPickupAsync(listing.Id, listing.CreatedByUserId, "recycler-1");
 
             var ok = await svc.ConfirmPickupAsync(listing.Id, "recycler-2");
 
@@ -273,7 +278,7 @@ namespace PantMigTesting.Services
             var svc = CreateService(db);
             var listing = await svc.CreateAsync(NewListing());
             await svc.RequestPickupAsync(listing.Id, "recycler-1");
-            await svc.AcceptPickupAsync(listing.Id, listing.CreatedByUserId);
+            await svc.AcceptPickupAsync(listing.Id, listing.CreatedByUserId, "recycler-1");
             await svc.ConfirmPickupAsync(listing.Id, "recycler-1");
 
             var ok = await svc.SubmitReceiptAsync(listing.Id, "recycler-1", "http://img/1.png", 123.45m);
@@ -304,7 +309,7 @@ namespace PantMigTesting.Services
             var svc = CreateService(db);
             var listing = await svc.CreateAsync(NewListing(donatorId: "donator-1"));
             await svc.RequestPickupAsync(listing.Id, "recycler-1");
-            await svc.AcceptPickupAsync(listing.Id, "donator-1");
+            await svc.AcceptPickupAsync(listing.Id, "donator-1", "recycler-1");
             await svc.ConfirmPickupAsync(listing.Id, "recycler-1");
             await svc.SubmitReceiptAsync(listing.Id, "recycler-1", "http://img/1.png", 123m);
 
@@ -325,7 +330,7 @@ namespace PantMigTesting.Services
             var svc = CreateService(db);
             var listing = await svc.CreateAsync(NewListing(donatorId: "donator-1"));
             await svc.RequestPickupAsync(listing.Id, "recycler-1");
-            await svc.AcceptPickupAsync(listing.Id, "donator-1");
+            await svc.AcceptPickupAsync(listing.Id, "donator-1", "recycler-1");
             await svc.ConfirmPickupAsync(listing.Id, "recycler-1");
             await svc.SubmitReceiptAsync(listing.Id, "recycler-1", "http://img/1.png", 123m);
 
@@ -347,7 +352,7 @@ namespace PantMigTesting.Services
             Assert.True(await svc.RequestPickupAsync(listing.Id, "recycler-1"));
 
             // 3. Donator accepts
-            Assert.True(await svc.AcceptPickupAsync(listing.Id, "donator-1"));
+            Assert.True(await svc.AcceptPickupAsync(listing.Id, "donator-1", "recycler-1"));
 
             // 4. Start chat
             Assert.True(await svc.StartChatAsync(listing.Id, "chat-xyz"));

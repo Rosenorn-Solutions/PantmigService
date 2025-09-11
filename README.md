@@ -74,10 +74,13 @@ API overview (base: /listings)
   - Creates a listing
 - POST /listings/pickup/request (Authenticated)
   - Body: { listingId }
-  - Recycler requests pickup
-- POST /listings/pickup/accept (VerifiedDonator)
-  - Body: { listingId }
-  - Donator accepts recycler
+  - Recycler requests pickup. Adds the recycler to the applicants list and moves listing to PendingAcceptance.
+- GET /listings/{id}/applicants (VerifiedDonator; must be creator)
+  - Returns: [ "recyclerUserId1", "recyclerUserId2", ... ]
+  - Donator views the list of applicants for the listing.
+- POST /listings/pickup/accept (VerifiedDonator; must be creator)
+  - Body: { listingId, recyclerUserId }
+  - Donator accepts a selected applicant. Assigns AssignedRecyclerUserId and moves to Accepted.
 - POST /listings/chat/start (Authenticated; only donator or assigned recycler)
   - Body: { listingId }
   - Starts direct chat for the listing
@@ -92,23 +95,27 @@ API overview (base: /listings)
 - POST /listings/receipt/verify (VerifiedDonator)
   - Body: { listingId, verifiedAmount }
 
-End-to-end workflow
+End-to-end workflow (updated)
 - 1. Create listing (donator)
   - Endpoint: POST /listings (VerifiedDonator)
   - State: Created, IsActive = true
   - Visible in GET /listings
 - 2. Request pickup (recycler)
   - Endpoint: POST /listings/pickup/request (Auth)
-  - Assigns AssignedRecyclerUserId, State: PendingAcceptance
+  - Adds recycler to applicants, State: PendingAcceptance
   - Listing is no longer returned by GET /listings
+- 2.5 View applicants (donator)
+  - Endpoint: GET /listings/{id}/applicants (VerifiedDonator, creator)
+  - Donator reviews applicants list
 - 3. Accept pickup (donator)
-  - Endpoint: POST /listings/pickup/accept (VerifiedDonator, must be creator)
-  - State: Accepted, AcceptedAt set
+  - Endpoint: POST /listings/pickup/accept (VerifiedDonator, creator)
+  - Body includes recyclerUserId of the chosen applicant
+  - State: Accepted, AcceptedAt set; AssignedRecyclerUserId set
 - 4. Start chat (donator or assigned recycler)
   - Endpoint: POST /listings/chat/start (Auth, participants only)
   - Sets ChatSessionId = "listing-{id}"
 - 4.1 Set meeting point (donator)
-  - Endpoint: POST /listings/meeting/set (VerifiedDonator, must be creator; requires chat started)
+  - Endpoint: POST /listings/meeting/set (VerifiedDonator, creator; requires chat started)
   - Sets MeetingLatitude, MeetingLongitude, MeetingSetAt
 - 5. Confirm pickup (assigned recycler)
   - Endpoint: POST /listings/pickup/confirm (Auth; assigned recycler)
@@ -117,12 +124,17 @@ End-to-end workflow
   - Endpoint: POST /listings/receipt/submit (Auth; assigned recycler)
   - Sets ReceiptImageUrl, ReportedAmount; State: AwaitingVerification
 - 7. Verify receipt (donator)
-  - Endpoint: POST /listings/receipt/verify (VerifiedDonator, must be creator)
+  - Endpoint: POST /listings/receipt/verify (VerifiedDonator, creator)
   - Sets VerifiedAmount, CompletedAt; State: Completed, IsActive = false
+
+Model updates (applicants)
+- RecycleListing now has Applicants (collection of RecycleListingApplicant) and a convenience AppliedForRecyclementUserIdList (not mapped) listing applicant user IDs.
+- New entity RecycleListingApplicant with unique index on (ListingId, RecyclerUserId) prevents duplicate applications.
+- DbContext has DbSet<RecycleListingApplicant> and configured relationships with cascade delete.
 
 Testing
 - Run all tests: dotnet test
-- PantMigTesting includes end-to-end tests that drive the minimal APIs and exercise listing flow
+- PantMigTesting includes end-to-end tests that drive the minimal APIs and exercise the updated applicants flow
 
 Configuration notes
 - Swagger is enabled in Development

@@ -89,6 +89,10 @@ builder.Services.AddAuthorization(options =>
         //});
     });
 });
+
+// Memory cache for ratings and small profile data
+builder.Services.AddMemoryCache();
+
 builder.Services.AddHttpClient();
 builder.Services.AddEndpointsApiExplorer();
 
@@ -128,7 +132,7 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-// CORS: read allowed origins from configuration
+// CORS configuration: read allowed origins from configuration
 var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
 
 bool IsOriginAllowed(string origin)
@@ -139,7 +143,7 @@ bool IsOriginAllowed(string origin)
     {
         if (string.IsNullOrWhiteSpace(pattern)) continue;
 
-        // Wildcard subdomain support like https://*.findjob.nu
+        // Wildcard subdomain support like https://*.pantmig.dk
         if (pattern.Contains("*"))
         {
             if (pattern.StartsWith("https://*.", StringComparison.OrdinalIgnoreCase))
@@ -178,12 +182,14 @@ builder.Services.AddCors(options =>
             .AllowAnyHeader()
             .AllowAnyMethod()
             .SetIsOriginAllowed(IsOriginAllowed);
-        // To support cookies, also call .AllowCredentials() and ensure origins are not "*"
     });
 });
 
-// Register services
+// Service registrations
 builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddScoped<ICityResolver, CityResolver>();
+builder.Services.AddScoped<IUsernameGenerator, UsernameGenerator>();
+builder.Services.AddScoped<IAuthService, AuthServiceImpl>();
 
 var app = builder.Build();
 
@@ -200,12 +206,35 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
+// Optional CSV seed of postal codes at startup
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    // Use ContentRootPath so we can read the CSV from the project directory without copying to bin
+    var csvPath = Path.Combine(app.Environment.ContentRootPath, "postal_codes_da.csv");
+    try
+    {
+        if (!File.Exists(csvPath))
+        {
+            Log.Information("Postal code CSV not found at {CsvPath}. Skipping postal seed.", csvPath);
+        }
+        else
+        {
+            await PostalCodeCsvSeeder.SeedAsync(db, csvPath);
+            Log.Information("PostalCodeCsvSeeder executed for {CsvPath}", csvPath);
+        }
+    }
+    catch (Exception ex)
+    {
+        Log.Warning(ex, "PostalCodeCsvSeeder failed");
+    }
+}
+
 app.UseForwardedHeaders(new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost
 });
 
-// Enable CORS before other middleware
 app.UseCors("ConfiguredCors");
 
 app.UseSwagger();
@@ -216,97 +245,6 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 
-// Map endpoints
 app.MapAuthEndpoints();
 
 app.Run();
-
-// Helpers
-static (string token, DateTime expires) GenerateAccessToken(ApplicationUser user, IConfiguration config)
-{
-    var jwtSection = config.GetSection("JwtSettings");
-    var secretKey = jwtSection["SecretKey"] ?? throw new InvalidOperationException("Jwt SecretKey not configured");
-    var issuer = jwtSection["Issuer"];
-    var audience = jwtSection["Audience"];
-    var minutesString = jwtSection["AccessTokenMinutes"];
-    var expires = DateTime.UtcNow.AddMinutes(int.TryParse(minutesString, out var m) ? m : 60);
-
-    var claims = new List<Claim>
-    {
-        new(JwtRegisteredClaimNames.Sub, user.Id),
-        new(ClaimTypes.NameIdentifier, user.Id),
-        new(JwtRegisteredClaimNames.Email, user.Email ?? string.Empty),
-        new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-        new(ClaimTypes.GivenName, user.FirstName ?? string.Empty),
-        new(ClaimTypes.Surname, user.LastName ?? string.Empty),
-        new(ClaimTypes.MobilePhone, user.PhoneNumber ?? string.Empty),
-        new("userType", user.UserType.ToString()),
-        new("isMitIdVerified", user.IsMitIdVerified.ToString())
-    };
-
-    var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
-    var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-
-    var token = new JwtSecurityToken(
-        issuer: issuer,
-        audience: audience,
-        claims: claims,
-        expires: expires,
-        signingCredentials: creds
-    );
-
-    var encoded = new JwtSecurityTokenHandler().WriteToken(token);
-    return (encoded, expires);
-}
-
-static async Task<string> GenerateAndStoreRefreshTokenAsync(ApplicationUser user, ApplicationDbContext db, IConfiguration config)
-{
-    var tokenBytes = RandomNumberGenerator.GetBytes(64);
-    var token = Convert.ToBase64String(tokenBytes);
-    var daysCfg = config.GetSection("JwtSettings")["RefreshTokenDays"];
-    var expires = DateTime.UtcNow.AddDays(int.TryParse(daysCfg, out var d) ? d : 30);
-
-    var rt = new RefreshToken
-    {
-        UserId = user.Id,
-        Token = token,
-        Expires = expires,
-        Created = DateTime.UtcNow
-    };
-
-    db.RefreshTokens.Add(rt);
-    await db.SaveChangesAsync();
-    return token;
-}
-
-static (ClaimsPrincipal? principal, string? error) GetPrincipalFromExpiredToken(string token, IConfiguration config)
-{
-    var jwtSection = config.GetSection("JwtSettings");
-    var secretKey = jwtSection["SecretKey"] ?? string.Empty;
-    var issuer = jwtSection["Issuer"];
-    var audience = jwtSection["Audience"];
-
-    var tokenValidationParameters = new TokenValidationParameters
-    {
-        ValidateAudience = true,
-        ValidateIssuer = true,
-        ValidateIssuerSigningKey = true,
-        ValidateLifetime = false, // allow expired token
-        ValidIssuer = issuer,
-        ValidAudience = audience,
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
-    };
-
-    var tokenHandler = new JwtSecurityTokenHandler();
-    try
-    {
-        var principal = tokenHandler.ValidateToken(token, tokenValidationParameters, out var securityToken);
-        if (securityToken is not JwtSecurityToken jwt || !jwt.Header.Alg.Equals(SecurityAlgorithms.HmacSha256, StringComparison.InvariantCultureIgnoreCase))
-            return (null, "Invalid token algorithm");
-        return (principal, null);
-    }
-    catch (Exception ex)
-    {
-        return (null, ex.Message);
-    }
-}

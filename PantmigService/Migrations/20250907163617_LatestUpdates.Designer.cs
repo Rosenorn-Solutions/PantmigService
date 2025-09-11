@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using PantmigService.Data;
 
@@ -11,9 +12,11 @@ using PantmigService.Data;
 namespace PantmigService.Migrations
 {
     [DbContext(typeof(PantmigDbContext))]
-    partial class PantmigDbContextModelSnapshot : ModelSnapshot
+    [Migration("20250907163617_LatestUpdates")]
+    partial class LatestUpdates
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -142,12 +145,12 @@ namespace PantmigService.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("EstimatedAmount")
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<decimal?>("EstimatedValue")
+                    b.Property<decimal>("EstimatedAmount")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("EstimatedValue")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
@@ -192,7 +195,7 @@ namespace PantmigService.Migrations
 
                     b.HasIndex("CreatedByUserId");
 
-                    b.HasIndex("EstimatedValue");
+                    b.HasIndex("EstimatedAmount");
 
                     b.HasIndex("CityId", "AvailableFrom", "AvailableTo");
 

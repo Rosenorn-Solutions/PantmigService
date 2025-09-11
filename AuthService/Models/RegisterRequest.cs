@@ -10,5 +10,8 @@
         public string MitId { get; set; } = string.Empty;
         // New: role selection at registration
         public UserType UserType { get; set; } = UserType.Recycler;
+
+        // Optional: City (Bopæls by)
+        public string? City { get; set; }
     }
 }

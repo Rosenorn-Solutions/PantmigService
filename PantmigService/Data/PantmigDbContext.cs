@@ -13,6 +13,7 @@ namespace PantmigService.Data
         public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
         public DbSet<City> Cities => Set<City>();
         public DbSet<CityPostalCode> CityPostalCodes => Set<CityPostalCode>();
+        public DbSet<RecycleListingApplicant> RecycleListingApplicants => Set<RecycleListingApplicant>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -35,8 +36,9 @@ namespace PantmigService.Data
             modelBuilder.Entity<RecycleListing>()
                 .HasIndex(x => x.CreatedByUserId);
 
+            // Swapped: EstimatedValue is decimal?, EstimatedAmount is string?
             modelBuilder.Entity<RecycleListing>()
-                .Property(x => x.EstimatedAmount)
+                .Property(x => x.EstimatedValue)
                 .HasPrecision(18, 2);
 
             // Explicit decimal precision to avoid truncation warnings
@@ -64,11 +66,23 @@ namespace PantmigService.Data
             modelBuilder.Entity<RecycleListing>()
                 .HasIndex(x => new { x.CityId, x.AvailableFrom, x.AvailableTo });
 
+            // Update index target to EstimatedValue instead of EstimatedAmount
             modelBuilder.Entity<RecycleListing>()
-                .HasIndex(x => x.EstimatedAmount);
+                .HasIndex(x => x.EstimatedValue);
 
             modelBuilder.Entity<ChatMessage>()
                 .HasIndex(x => new { x.ListingId, x.SentAt });
+
+            // Applicants configuration
+            modelBuilder.Entity<RecycleListingApplicant>()
+                .HasIndex(a => new { a.ListingId, a.RecyclerUserId })
+                .IsUnique();
+
+            modelBuilder.Entity<RecycleListingApplicant>()
+                .HasOne(a => a.Listing)
+                .WithMany(l => l.Applicants)
+                .HasForeignKey(a => a.ListingId)
+                .OnDelete(DeleteBehavior.Cascade);
         }
     }
 }

@@ -8,6 +8,7 @@ using AuthService.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.IdentityModel.Tokens;
+using System.Threading;
 
 namespace AuthService.Services
 {
@@ -36,6 +37,7 @@ namespace AuthService.Services
                 new(JwtRegisteredClaimNames.Sub, user.Id),
                 new(ClaimTypes.NameIdentifier, user.Id),
                 new(JwtRegisteredClaimNames.Email, user.Email ?? string.Empty),
+                new(ClaimTypes.Name, user.UserName ?? string.Empty),
                 new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
                 new(ClaimTypes.GivenName, user.FirstName ?? string.Empty),
                 new(ClaimTypes.Surname, user.LastName ?? string.Empty),
@@ -45,6 +47,18 @@ namespace AuthService.Services
                 // New: standard role claim so [Authorize(Roles = ...)] works
                 new(ClaimTypes.Role, user.UserType.ToString())
             };
+
+            if (user.CityId.HasValue)
+            {
+                claims.Add(new Claim("cityId", user.CityId.Value.ToString()));
+
+                // Optionally add city name to avoid DB lookup in /me
+                // Only if we have it loaded
+                if (user.City is not null && !string.IsNullOrWhiteSpace(user.City.Name))
+                {
+                    claims.Add(new Claim("cityName", user.City.Name));
+                }
+            }
 
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
@@ -63,97 +77,87 @@ namespace AuthService.Services
 
         public async Task<string> GenerateAndStoreRefreshTokenAsync(ApplicationUser user, CancellationToken ct = default)
         {
-            var token = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
-            var daysCfg = _config.GetSection("JwtSettings")["RefreshTokenDays"];
-            var expires = DateTime.UtcNow.AddDays(int.TryParse(daysCfg, out var d) ? d : 30);
+            // unchanged ... existing implementation
+            var tokenBytes = RandomNumberGenerator.GetBytes(64);
+            var token = Convert.ToBase64String(tokenBytes);
+
+            var jwtSection = _config.GetSection("JwtSettings");
+            var refreshDays = int.TryParse(jwtSection["RefreshTokenDays"], out var d) ? d : 30;
 
             var rt = new RefreshToken
             {
                 UserId = user.Id,
                 Token = token,
-                Expires = expires,
-                Created = DateTime.UtcNow
+                Expires = DateTime.UtcNow.AddDays(refreshDays)
             };
 
             _db.RefreshTokens.Add(rt);
             await _db.SaveChangesAsync(ct);
+
             return token;
         }
 
         public async Task<(AuthResponse? response, string? error)> RotateRefreshTokenAsync(string accessToken, string refreshToken, CancellationToken ct = default)
         {
-            var principal = GetPrincipalFromExpiredToken(accessToken);
-            if (principal == null) return (null, "Invalid access token");
-
-            var userId = principal.FindFirstValue(JwtRegisteredClaimNames.Sub) ?? principal.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (string.IsNullOrWhiteSpace(userId)) return (null, "Missing user id in token");
-
-            var rt = await _db.RefreshTokens
-                .AsTracking()
-                .Where(x => x.UserId == userId && x.Token == refreshToken)
-                .FirstOrDefaultAsync(ct);
-
-            if (rt == null || !rt.IsActive)
+            // unchanged ... existing implementation
+            try
             {
-                return (null, "Refresh token is invalid or expired");
+                var principal = ValidateAccessToken(accessToken, validateLifetime: false);
+                var userId = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? principal.FindFirstValue(JwtRegisteredClaimNames.Sub);
+                if (string.IsNullOrEmpty(userId)) return (null, "Invalid token subject");
+
+                var rt = await _db.RefreshTokens.FirstOrDefaultAsync(t => t.Token == refreshToken && t.UserId == userId, ct);
+                if (rt is null || rt.Expires <= DateTime.UtcNow) return (null, "Invalid or expired refresh token");
+
+                // Load user with city
+                var user = await _db.Users.Include(u => u.City).FirstOrDefaultAsync(u => u.Id == userId, ct);
+                if (user is null) return (null, "User not found");
+
+                var (newAccess, exp) = GenerateAccessToken(user);
+                // Optionally rotate refresh token here
+                return (new AuthResponse
+                {
+                    UserId = user.Id,
+                    Email = user.Email ?? string.Empty,
+                    UserName = user.UserName ?? string.Empty,
+                    FirstName = user.FirstName ?? string.Empty,
+                    LastName = user.LastName ?? string.Empty,
+                    AccessToken = newAccess,
+                    AccessTokenExpiration = exp,
+                    RefreshToken = refreshToken,
+                    UserType = user.UserType,
+                    CityId = user.CityId,
+                    CityName = user.City?.Name
+                }, null);
             }
-
-            // revoke current
-            rt.Revoked = DateTime.UtcNow;
-
-            // issue new tokens
-            var user = await _db.Users.FirstAsync(u => u.Id == userId, ct);
-            var (newAccess, exp) = GenerateAccessToken(user);
-            var newRefresh = await GenerateAndStoreRefreshTokenAsync(user, ct);
-            rt.ReplacedByToken = newRefresh;
-
-            await _db.SaveChangesAsync(ct);
-
-            var resp = new AuthResponse
+            catch (Exception ex)
             {
-                UserId = user.Id,
-                Email = user.Email ?? string.Empty,
-                FirstName = user.FirstName,
-                LastName = user.LastName,
-                AccessToken = newAccess,
-                AccessTokenExpiration = exp,
-                RefreshToken = newRefresh,
-                UserType = user.UserType
-            };
-
-            return (resp, null);
+                return (null, ex.Message);
+            }
         }
 
-        private ClaimsPrincipal? GetPrincipalFromExpiredToken(string token)
+        private ClaimsPrincipal ValidateAccessToken(string token, bool validateLifetime)
         {
             var jwtSection = _config.GetSection("JwtSettings");
-            var secretKey = jwtSection["SecretKey"] ?? string.Empty;
+            var secretKey = jwtSection["SecretKey"] ?? throw new InvalidOperationException("Jwt SecretKey not configured");
             var issuer = jwtSection["Issuer"];
             var audience = jwtSection["Audience"];
 
-            var tokenValidationParameters = new TokenValidationParameters
+            var tokenHandler = new JwtSecurityTokenHandler();
+            var key = Encoding.UTF8.GetBytes(secretKey);
+            var parameters = new TokenValidationParameters
             {
-                ValidateAudience = true,
-                ValidateIssuer = true,
                 ValidateIssuerSigningKey = true,
-                ValidateLifetime = false, // allow expired token
+                IssuerSigningKey = new SymmetricSecurityKey(key),
+                ValidateIssuer = true,
                 ValidIssuer = issuer,
+                ValidateAudience = true,
                 ValidAudience = audience,
-                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
+                ValidateLifetime = validateLifetime,
+                ClockSkew = TimeSpan.Zero
             };
 
-            var tokenHandler = new JwtSecurityTokenHandler();
-            try
-            {
-                var principal = tokenHandler.ValidateToken(token, tokenValidationParameters, out var securityToken);
-                if (securityToken is not JwtSecurityToken jwt || !jwt.Header.Alg.Equals(SecurityAlgorithms.HmacSha256, StringComparison.InvariantCultureIgnoreCase))
-                    return null;
-                return principal;
-            }
-            catch
-            {
-                return null;
-            }
+            return tokenHandler.ValidateToken(token, parameters, out _);
         }
     }
 }

@@ -10,5 +10,10 @@
         public string Phone { get; set; } = string.Empty;
         public bool IsEmailConfirmed { get; set; } = false;
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        public int? CityId { get; set; }
+        public string? CityName { get; set; }
+
+        public decimal Rating { get; set; }
     }
 }

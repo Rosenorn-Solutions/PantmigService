@@ -204,6 +204,7 @@ namespace PantmigService
 
             // Endpoints
             app.MapRecycleListingEndpoints();
+            app.MapCityEndpoints();
             app.MapHub<ChatHub>("/hubs/chat");
 
             app.Run();

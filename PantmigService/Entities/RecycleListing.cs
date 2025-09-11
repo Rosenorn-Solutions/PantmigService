@@ -1,4 +1,6 @@
-﻿namespace PantmigService.Entities
+﻿using System.ComponentModel.DataAnnotations.Schema;
+
+namespace PantmigService.Entities
 {
     public enum ListingStatus
     {
@@ -17,8 +19,9 @@
         public string Title { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
         public string Location { get; set; } = string.Empty;
-        public string? EstimatedValue { get; set; }
-        public decimal EstimatedAmount { get; set; } // numeric for queries
+        // Swapped types: Value now decimal?, Amount now string?
+        public decimal? EstimatedValue { get; set; }
+        public string? EstimatedAmount { get; set; }
         public DateTime AvailableFrom { get; set; }
         public DateTime AvailableTo { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -44,5 +47,12 @@
         public decimal? MeetingLatitude { get; set; }
         public decimal? MeetingLongitude { get; set; }
         public DateTime? MeetingSetAt { get; set; }
+
+        // Applicants for this listing
+        public ICollection<RecycleListingApplicant> Applicants { get; set; } = [];
+
+        // Convenience property
+        [NotMapped]
+        public List<string> AppliedForRecyclementUserIdList => [.. Applicants.Select(a => a.RecyclerUserId)];
     }
 }

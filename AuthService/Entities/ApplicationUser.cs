@@ -1,5 +1,7 @@
 ﻿using AuthService.Models;
 using Microsoft.AspNetCore.Identity;
+using Microsoft.EntityFrameworkCore;
+using System.ComponentModel.DataAnnotations;
 
 namespace AuthService.Entities
 {
@@ -14,5 +16,14 @@ namespace AuthService.Entities
         public bool IsMitIdVerified { get; set; } = false;
         public string? MitId { get; set; } = string.Empty;
         public UserType UserType { get; set; } = UserType.Recycler;
+
+        // Optional link to the city (Bopæls by)
+        public int? CityId { get; set; }
+        public City? City { get; set; }
+
+        // Aggregated rating for the user, 0.00 - 5.00
+        [Range(0, 5)]
+        [Precision(3, 2)]
+        public decimal Rating { get; set; } = 0m;
     }
 }
