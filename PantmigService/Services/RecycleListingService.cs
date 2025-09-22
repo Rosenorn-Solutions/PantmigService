@@ -225,13 +225,19 @@ namespace PantmigService.Services
             return true;
         }
 
-        public async Task<bool> ConfirmPickupAsync(int id, string recyclerUserId, CancellationToken ct = default)
+        // Now pickup is confirmed by the donator (owner) after chat and meeting are set
+        public async Task<bool> ConfirmPickupAsync(int id, string donatorUserId, CancellationToken ct = default)
         {
-            _logger.LogDebug("Confirming pickup for listing {ListingId} by recycler {Recycler}", id, recyclerUserId);
+            _logger.LogDebug("Confirming pickup for listing {ListingId} by donator {Donator}", id, donatorUserId);
             var listing = await _db.RecycleListings.FirstOrDefaultAsync(x => x.Id == id, ct);
             if (listing is null || !listing.IsActive)
             {
                 _logger.LogWarning("ConfirmPickup failed: listing {ListingId} not found or inactive", id);
+                return false;
+            }
+            if (!string.Equals(listing.CreatedByUserId, donatorUserId, StringComparison.Ordinal))
+            {
+                _logger.LogWarning("ConfirmPickup failed: user {UserId} not owner of listing {ListingId}", donatorUserId, id);
                 return false;
             }
             if (listing.Status != ListingStatus.Accepted)
@@ -239,70 +245,46 @@ namespace PantmigService.Services
                 _logger.LogWarning("ConfirmPickup failed: listing {ListingId} not in Accepted state (Status={Status})", id, listing.Status);
                 return false;
             }
-            if (!string.Equals(listing.AssignedRecyclerUserId, recyclerUserId, StringComparison.Ordinal))
+            if (string.IsNullOrWhiteSpace(listing.ChatSessionId) || listing.MeetingLatitude is null || listing.MeetingLongitude is null)
             {
-                _logger.LogWarning("ConfirmPickup failed: recycler {Recycler} not assigned to listing {ListingId}", recyclerUserId, id);
+                _logger.LogWarning("ConfirmPickup failed: chat not started or meeting point not set for listing {ListingId}", id);
                 return false;
             }
-            listing.Status = ListingStatus.PickedUp;
-            listing.PickupConfirmedAt = DateTime.UtcNow;
-            await _db.SaveChangesAsync(ct);
-            _logger.LogInformation("Pickup confirmed for listing {ListingId}", id);
-            return true;
-        }
 
-        public async Task<bool> SubmitReceiptAsync(int id, string recyclerUserId, string receiptImageUrl, decimal reportedAmount, CancellationToken ct = default)
-        {
-            _logger.LogDebug("Submitting receipt for listing {ListingId} by recycler {Recycler}", id, recyclerUserId);
-            var listing = await _db.RecycleListings.FirstOrDefaultAsync(x => x.Id == id, ct);
-            if (listing is null || !listing.IsActive)
-            {
-                _logger.LogWarning("SubmitReceipt failed: listing {ListingId} not found or inactive", id);
-                return false;
-            }
-            if (listing.Status != ListingStatus.PickedUp)
-            {
-                _logger.LogWarning("SubmitReceipt failed: listing {ListingId} not in PickedUp state (Status={Status})", id, listing.Status);
-                return false;
-            }
-            if (!string.Equals(listing.AssignedRecyclerUserId, recyclerUserId, StringComparison.Ordinal))
-            {
-                _logger.LogWarning("SubmitReceipt failed: recycler {Recycler} not assigned to listing {ListingId}", recyclerUserId, id);
-                return false;
-            }
-            listing.ReceiptImageUrl = receiptImageUrl;
-            listing.ReportedAmount = reportedAmount;
-            listing.Status = ListingStatus.AwaitingVerification;
-            await _db.SaveChangesAsync(ct);
-            _logger.LogInformation("Receipt submitted for listing {ListingId}", id);
-            return true;
-        }
-
-        public async Task<bool> VerifyReceiptAsync(int id, string donatorUserId, decimal verifiedAmount, CancellationToken ct = default)
-        {
-            _logger.LogDebug("Verifying receipt for listing {ListingId} by donator {Donator}", id, donatorUserId);
-            var listing = await _db.RecycleListings.FirstOrDefaultAsync(x => x.Id == id, ct);
-            if (listing is null || !listing.IsActive)
-            {
-                _logger.LogWarning("VerifyReceipt failed: listing {ListingId} not found or inactive", id);
-                return false;
-            }
-            if (listing.Status != ListingStatus.AwaitingVerification)
-            {
-                _logger.LogWarning("VerifyReceipt failed: listing {ListingId} not in AwaitingVerification state (Status={Status})", id, listing.Status);
-                return false;
-            }
-            if (!string.Equals(listing.CreatedByUserId, donatorUserId, StringComparison.Ordinal))
-            {
-                _logger.LogWarning("VerifyReceipt failed: user {UserId} not owner of listing {ListingId}", donatorUserId, id);
-                return false;
-            }
-            listing.VerifiedAmount = verifiedAmount;
+            // Mark listing as completed at pickup confirmation (workflow ends here).
             listing.Status = ListingStatus.Completed;
+            listing.PickupConfirmedAt = DateTime.UtcNow;
             listing.CompletedAt = DateTime.UtcNow;
             listing.IsActive = false;
             await _db.SaveChangesAsync(ct);
-            _logger.LogInformation("Listing {ListingId} completed (verified)", id);
+            _logger.LogInformation("Pickup confirmed and listing {ListingId} completed", id);
+            return true;
+        }
+
+        public async Task<bool> SubmitReceiptUploadAsync(int id, string recyclerUserId, string fileName, string contentType, byte[] data, decimal reportedAmount, CancellationToken ct = default)
+        {
+            _logger.LogDebug("Submitting receipt upload for listing {ListingId} by recycler {Recycler}", id, recyclerUserId);
+            var listing = await _db.RecycleListings.FirstOrDefaultAsync(x => x.Id == id, ct);
+            if (listing is null)
+            {
+                _logger.LogWarning("SubmitReceiptUpload failed: listing {ListingId} not found", id);
+                return false;
+            }
+            if (!string.Equals(listing.AssignedRecyclerUserId, recyclerUserId, StringComparison.Ordinal))
+            {
+                _logger.LogWarning("SubmitReceiptUpload failed: recycler {Recycler} not assigned to listing {ListingId}", recyclerUserId, id);
+                return false;
+            }
+
+            // Store the receipt without changing status
+            listing.ReceiptImageUrl = null;
+            listing.ReceiptImageBytes = data;
+            listing.ReceiptImageContentType = contentType;
+            listing.ReceiptImageFileName = fileName;
+            listing.ReportedAmount = reportedAmount;
+
+            await _db.SaveChangesAsync(ct);
+            _logger.LogInformation("Receipt uploaded for listing {ListingId}", id);
             return true;
         }
 

@@ -241,106 +241,48 @@ namespace PantMigTesting.Services
         }
 
         [Fact]
-        public async Task ConfirmPickupAsync_Succeeds_When_Accepted_And_Recycler_Matches()
-        {
-            using var db = CreateDb();
-            var svc = CreateService(db);
-            var listing = await svc.CreateAsync(NewListing());
-            await svc.RequestPickupAsync(listing.Id, "recycler-1");
-            await svc.AcceptPickupAsync(listing.Id, listing.CreatedByUserId, "recycler-1");
-
-            var ok = await svc.ConfirmPickupAsync(listing.Id, "recycler-1");
-
-            Assert.True(ok);
-            var fromDb = await db.RecycleListings.FindAsync(listing.Id);
-            Assert.Equal(ListingStatus.PickedUp, fromDb!.Status);
-            Assert.NotNull(fromDb.PickupConfirmedAt);
-        }
-
-        [Fact]
-        public async Task ConfirmPickupAsync_Fails_When_Recycler_Does_Not_Match()
-        {
-            using var db = CreateDb();
-            var svc = CreateService(db);
-            var listing = await svc.CreateAsync(NewListing());
-            await svc.RequestPickupAsync(listing.Id, "recycler-1");
-            await svc.AcceptPickupAsync(listing.Id, listing.CreatedByUserId, "recycler-1");
-
-            var ok = await svc.ConfirmPickupAsync(listing.Id, "recycler-2");
-
-            Assert.False(ok);
-        }
-
-        [Fact]
-        public async Task SubmitReceiptAsync_Succeeds_When_PickedUp_And_Recycler_Matches()
-        {
-            using var db = CreateDb();
-            var svc = CreateService(db);
-            var listing = await svc.CreateAsync(NewListing());
-            await svc.RequestPickupAsync(listing.Id, "recycler-1");
-            await svc.AcceptPickupAsync(listing.Id, listing.CreatedByUserId, "recycler-1");
-            await svc.ConfirmPickupAsync(listing.Id, "recycler-1");
-
-            var ok = await svc.SubmitReceiptAsync(listing.Id, "recycler-1", "http://img/1.png", 123.45m);
-
-            Assert.True(ok);
-            var fromDb = await db.RecycleListings.FindAsync(listing.Id);
-            Assert.Equal(ListingStatus.AwaitingVerification, fromDb!.Status);
-            Assert.Equal("http://img/1.png", fromDb.ReceiptImageUrl);
-            Assert.Equal(123.45m, fromDb.ReportedAmount);
-        }
-
-        [Fact]
-        public async Task SubmitReceiptAsync_Fails_When_Status_Not_PickedUp()
-        {
-            using var db = CreateDb();
-            var svc = CreateService(db);
-            var listing = await svc.CreateAsync(NewListing());
-
-            var ok = await svc.SubmitReceiptAsync(listing.Id, "recycler-1", "http://img/1.png", 10m);
-
-            Assert.False(ok);
-        }
-
-        [Fact]
-        public async Task VerifyReceiptAsync_Succeeds_When_AwaitingVerification_And_Donator_Matches()
+        public async Task ConfirmPickupAsync_Succeeds_When_Accepted_And_Donator_Matches_And_Meeting_Set()
         {
             using var db = CreateDb();
             var svc = CreateService(db);
             var listing = await svc.CreateAsync(NewListing(donatorId: "donator-1"));
             await svc.RequestPickupAsync(listing.Id, "recycler-1");
             await svc.AcceptPickupAsync(listing.Id, "donator-1", "recycler-1");
-            await svc.ConfirmPickupAsync(listing.Id, "recycler-1");
-            await svc.SubmitReceiptAsync(listing.Id, "recycler-1", "http://img/1.png", 123m);
+            await svc.StartChatAsync(listing.Id, "chat-1");
+            await svc.SetMeetingPointAsync(listing.Id, "donator-1", 10m, 10m);
 
-            var ok = await svc.VerifyReceiptAsync(listing.Id, "donator-1", 120m);
+            var ok = await svc.ConfirmPickupAsync(listing.Id, "donator-1");
 
             Assert.True(ok);
             var fromDb = await db.RecycleListings.FindAsync(listing.Id);
             Assert.Equal(ListingStatus.Completed, fromDb!.Status);
-            Assert.Equal(120m, fromDb.VerifiedAmount);
-            Assert.False(fromDb.IsActive);
-            Assert.NotNull(fromDb.CompletedAt);
+            Assert.NotNull(fromDb.PickupConfirmedAt);
         }
 
         [Fact]
-        public async Task VerifyReceiptAsync_Fails_When_Wrong_Donator()
+        public async Task ConfirmPickupAsync_Fails_When_Not_Owner_Or_Wrong_Status_Or_Missing_Chat_Meeting()
         {
             using var db = CreateDb();
             var svc = CreateService(db);
             var listing = await svc.CreateAsync(NewListing(donatorId: "donator-1"));
             await svc.RequestPickupAsync(listing.Id, "recycler-1");
             await svc.AcceptPickupAsync(listing.Id, "donator-1", "recycler-1");
-            await svc.ConfirmPickupAsync(listing.Id, "recycler-1");
-            await svc.SubmitReceiptAsync(listing.Id, "recycler-1", "http://img/1.png", 123m);
 
-            var ok = await svc.VerifyReceiptAsync(listing.Id, "donator-2", 100m);
+            // Wrong owner
+            Assert.False(await svc.ConfirmPickupAsync(listing.Id, "someone-else"));
 
-            Assert.False(ok);
+            // Missing chat/meeting
+            Assert.False(await svc.ConfirmPickupAsync(listing.Id, "donator-1"));
+
+            // Setup and move status beyond Accepted
+            await svc.StartChatAsync(listing.Id, "chat-1");
+            await svc.SetMeetingPointAsync(listing.Id, "donator-1", 10m, 10m);
+            await svc.ConfirmPickupAsync(listing.Id, "donator-1");
+            Assert.False(await svc.ConfirmPickupAsync(listing.Id, "donator-1"));
         }
 
         [Fact]
-        public async Task EndToEnd_Recycle_Process_Completes_Successfully()
+        public async Task EndToEnd_Recycle_Process_Completes_Successfully_Without_Finalize()
         {
             using var db = CreateDb();
             var svc = CreateService(db);
@@ -360,23 +302,8 @@ namespace PantMigTesting.Services
             // 4.1 Donator sets meeting point
             Assert.True(await svc.SetMeetingPointAsync(listing.Id, "donator-1", 55.6761m, 12.5683m));
 
-            // 5. Recycler confirms pickup
-            Assert.True(await svc.ConfirmPickupAsync(listing.Id, "recycler-1"));
-
-            // 6. Recycler submits receipt
-            Assert.True(await svc.SubmitReceiptAsync(listing.Id, "recycler-1", "http://img/receipt.png", 250.00m));
-
-            // 7. Donator verifies receipt
-            Assert.True(await svc.VerifyReceiptAsync(listing.Id, "donator-1", 245.00m));
-
-            var final = await db.RecycleListings.FindAsync(listing.Id);
-            Assert.NotNull(final);
-            Assert.Equal(ListingStatus.Completed, final!.Status);
-            Assert.False(final.IsActive);
-            Assert.Equal(245.00m, final.VerifiedAmount);
-            Assert.Equal("chat-xyz", final.ChatSessionId);
-            Assert.Equal(55.676100m, final.MeetingLatitude);
-            Assert.Equal(12.568300m, final.MeetingLongitude);
+            // 5. Donator confirms pickup
+            Assert.True(await svc.ConfirmPickupAsync(listing.Id, "donator-1"));
         }
     }
 }

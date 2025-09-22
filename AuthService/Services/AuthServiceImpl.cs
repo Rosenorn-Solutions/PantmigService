@@ -19,6 +19,17 @@ namespace AuthService.Services
             if (string.IsNullOrWhiteSpace(req.Email) || string.IsNullOrWhiteSpace(req.Password))
                 return (false, "Email and password are required", null);
 
+            // Optional unique phone validation
+            if (!string.IsNullOrWhiteSpace(req.Phone))
+            {
+                var normalizedPhone = req.Phone.Trim();
+                var phoneExists = await userManager.Users.AnyAsync(u => u.PhoneNumber != null && u.PhoneNumber == normalizedPhone, ct);
+                if (phoneExists)
+                {
+                    return (false, "Phone number already in use", null);
+                }
+            }
+
             foreach (var roleName in new[] { nameof(UserType.Donator), nameof(UserType.Recycler) })
             {
                 if (!await roleManager.RoleExistsAsync(roleName))
@@ -40,7 +51,7 @@ namespace AuthService.Services
                 Email = req.Email,
                 FirstName = req.FirstName,
                 LastName = req.LastName,
-                PhoneNumber = req.Phone,
+                PhoneNumber = string.IsNullOrWhiteSpace(req.Phone) ? null : req.Phone.Trim(),
                 MitId = req.MitId,
                 IsMitIdVerified = false,
                 UserType = req.UserType,

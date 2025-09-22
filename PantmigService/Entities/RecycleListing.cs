@@ -19,7 +19,6 @@ namespace PantmigService.Entities
         public string Title { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
         public string Location { get; set; } = string.Empty;
-        // Swapped types: Value now decimal?, Amount now string?
         public decimal? EstimatedValue { get; set; }
         public string? EstimatedAmount { get; set; }
         public DateTime AvailableFrom { get; set; }
@@ -38,7 +37,13 @@ namespace PantmigService.Entities
         public DateTime? AcceptedAt { get; set; }
         public DateTime? PickupConfirmedAt { get; set; }
         public string? ChatSessionId { get; set; }
+
+        // Receipt storage: either an external URL or stored bytes
         public string? ReceiptImageUrl { get; set; }
+        public byte[]? ReceiptImageBytes { get; set; }
+        public string? ReceiptImageContentType { get; set; }
+        public string? ReceiptImageFileName { get; set; }
+
         public decimal? ReportedAmount { get; set; }
         public decimal? VerifiedAmount { get; set; }
         public DateTime? CompletedAt { get; set; }

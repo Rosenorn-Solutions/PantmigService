@@ -20,13 +20,16 @@ namespace PantmigService.Hubs
             _db = db;
         }
 
-        public async Task JoinListingChat(int listingId)
+        private string GetUserIdOrThrow()
         {
             var userId = Context.User?.FindFirstValue(ClaimTypes.NameIdentifier) ?? Context.User?.FindFirstValue("sub");
-            if (string.IsNullOrEmpty(userId))
-            {
-                throw new HubException("Unauthorized");
-            }
+            if (string.IsNullOrEmpty(userId)) throw new HubException("Unauthorized");
+            return userId;
+        }
+
+        public async Task JoinListingChat(int listingId)
+        {
+            var userId = GetUserIdOrThrow();
 
             var listing = await _listings.GetByIdAsync(listingId);
             if (listing is null)
@@ -77,11 +80,7 @@ namespace PantmigService.Hubs
         {
             if (string.IsNullOrWhiteSpace(message)) return;
 
-            var userId = Context.User?.FindFirstValue(ClaimTypes.NameIdentifier) ?? Context.User?.FindFirstValue("sub");
-            if (string.IsNullOrEmpty(userId))
-            {
-                throw new HubException("Unauthorized");
-            }
+            var userId = GetUserIdOrThrow();
 
             var listing = await _listings.GetByIdAsync(listingId);
             if (listing is null)

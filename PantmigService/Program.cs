@@ -12,6 +12,7 @@ using Serilog;
 using PantmigService.Hubs;
 using PantmigService.Seed;
 using System.Linq;
+using PantmigService.Security;
 
 namespace PantmigService
 {
@@ -166,6 +167,11 @@ namespace PantmigService
             // App services
             builder.Services.AddScoped<IRecycleListingService, RecycleListingService>();
             builder.Services.AddScoped<ICityResolver, CityResolver>();
+
+            // Antivirus scanner (ClamAV)
+            var clamSection = builder.Configuration.GetSection("ClamAV");
+            var clamOptions = clamSection.Get<ClamAvOptions>() ?? new ClamAvOptions();
+            builder.Services.AddSingleton<IAntivirusScanner>(_ => new ClamAvAntivirusScanner(clamOptions));
 
             // Real-time
             builder.Services.AddSignalR();

@@ -5,19 +5,19 @@ using Microsoft.OpenApi.Models;
 using PantmigService.Entities;
 using PantmigService.Services;
 using Microsoft.Extensions.Logging;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Antiforgery;
+using PantmigService.Security;
 
 namespace PantmigService.Endpoints
 {
     public static class RecycleListingEndpoints
     {
-        // Swapped: EstimatedValue now decimal?, EstimatedAmount now string?
         public record CreateRecycleListingRequest(string Title, string Description, string? City, string? Location, decimal? EstimatedValue, string? EstimatedAmount, DateTime AvailableFrom, DateTime AvailableTo);
         public record PickupRequest(int ListingId);
         public record AcceptRequest(int ListingId, string RecyclerUserId);
         public record ChatStartRequest(int ListingId);
         public record PickupConfirmRequest(int ListingId);
-        public record ReceiptSubmitRequest(int ListingId, string ReceiptImageUrl, decimal ReportedAmount);
-        public record ReceiptVerifyRequest(int ListingId, decimal VerifiedAmount);
         public record MeetingPointRequest(int ListingId, decimal Latitude, decimal Longitude);
         public record CancelRequest(int ListingId);
 
@@ -419,7 +419,7 @@ namespace PantmigService.Endpoints
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized);
 
-            // Recycler confirms pickup
+            // Donator confirms pickup (this now completes the listing)
             group.MapPost("/pickup/confirm", async (PickupConfirmRequest req, ClaimsPrincipal user, IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx) =>
             {
                 var logger = lf.CreateLogger("Listings");
@@ -431,7 +431,7 @@ namespace PantmigService.Endpoints
                     if (!ok)
                     {
                         logger.LogWarning("Pickup confirm failed for listing {ListingId} by user {UserId}", req.ListingId, userId);
-                        return Results.Problem(title: "Pickup confirm failed", detail: "Listing not accepted, inactive, or user not assigned.", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
+                        return Results.Problem(title: "Pickup confirm failed", detail: "Listing not accepted, chat/meeting not set, inactive, or user not owner.", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
                     }
                     logger.LogInformation("Pickup confirmed for listing {ListingId}", req.ListingId);
                     return Results.Ok();
@@ -442,89 +442,79 @@ namespace PantmigService.Endpoints
                     return Results.Problem(title: "Pickup confirm error", detail: ex.Message, statusCode: StatusCodes.Status500InternalServerError, instance: ctx.TraceIdentifier);
                 }
             })
-            .RequireAuthorization()
+            .RequireAuthorization("VerifiedDonator")
             .Accepts<PickupConfirmRequest>("application/json")
             .WithOpenApi(op =>
             {
                 op.OperationId = "Listings_PickupConfirm";
-                op.Summary = "Confirm pickup";
-                op.Description = "Recycler confirms that the pickup has been performed.";
+                op.Summary = "Confirm pickup and complete listing";
+                op.Description = "Donator confirms that the pickup has been performed (after chat and meeting point). This completes the listing.";
                 return op;
             })
             .Produces(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized);
 
-            // Recycler submits receipt
-            group.MapPost("/receipt/submit", async (ReceiptSubmitRequest req, ClaimsPrincipal user, IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx) =>
+            // Recycler uploads receipt image (binary upload)
+            group.MapPost("/receipt/upload", async ([FromForm] int listingId, [FromForm] decimal reportedAmount, [FromForm] IFormFile file, ClaimsPrincipal user, IRecycleListingService svc, IAntivirusScanner av, ILoggerFactory lf, HttpContext ctx) =>
             {
                 var logger = lf.CreateLogger("Listings");
                 try
                 {
                     var userId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
                     if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
-                    if (string.IsNullOrWhiteSpace(req.ReceiptImageUrl))
+
+                    if (file is null || file.Length == 0)
                     {
-                        return Results.Problem(title: "Validation error", detail: "ReceiptImageUrl is required", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
+                        return Results.Problem(title: "Validation error", detail: "Receipt file is required", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
                     }
-                    var ok = await svc.SubmitReceiptAsync(req.ListingId, userId, req.ReceiptImageUrl, req.ReportedAmount, ctx.RequestAborted);
+                    // Optional: basic content-type guard
+                    if (!string.IsNullOrEmpty(file.ContentType) && !file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+                    {
+                        return Results.Problem(title: "Validation error", detail: "Only image files are allowed", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
+                    }
+
+                    await using var ms = new MemoryStream();
+                    await file.CopyToAsync(ms, ctx.RequestAborted);
+                    ms.Position = 0;
+
+                    // Antivirus scan
+                    var scan = await av.ScanAsync(ms, file.FileName, ctx.RequestAborted);
+                    if (scan.Status == AntivirusScanStatus.Infected)
+                    {
+                        logger.LogWarning("Infected file upload blocked for listing {ListingId} by user {UserId}. Signature: {Signature}", listingId, userId, scan.Signature);
+                        return Results.Problem(title: "Malware detected", detail: $"The uploaded file appears to be infected: {scan.Signature}", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
+                    }
+                    if (scan.Status == AntivirusScanStatus.Error)
+                    {
+                        logger.LogError("Antivirus scan error for listing {ListingId} by user {UserId}: {Error}", listingId, userId, scan.Error);
+                        return Results.Problem(title: "Scan failed", detail: "Unable to scan the uploaded file. Please try again later.", statusCode: StatusCodes.Status503ServiceUnavailable, instance: ctx.TraceIdentifier);
+                    }
+
+                    var data = ms.ToArray();
+
+                    var ok = await svc.SubmitReceiptUploadAsync(listingId, userId, file.FileName, file.ContentType, data, reportedAmount, ctx.RequestAborted);
                     if (!ok)
                     {
-                        logger.LogWarning("Receipt submit failed for listing {ListingId} by user {UserId}", req.ListingId, userId);
-                        return Results.Problem(title: "Receipt submit failed", detail: "Listing not picked up, inactive, or user not assigned.", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
+                        logger.LogWarning("Receipt upload failed for listing {ListingId} by user {UserId}", listingId, userId);
+                        return Results.Problem(title: "Receipt upload failed", detail: "Listing not found or you are not the assigned recycler.", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
                     }
-                    logger.LogInformation("Receipt submitted for listing {ListingId}", req.ListingId);
+                    logger.LogInformation("Receipt uploaded for listing {ListingId}", listingId);
                     return Results.Ok();
                 }
                 catch (Exception ex)
                 {
-                    logger.LogError(ex, "Error submitting receipt for listing {ListingId}", req.ListingId);
-                    return Results.Problem(title: "Receipt submit error", detail: ex.Message, statusCode: StatusCodes.Status500InternalServerError, instance: ctx.TraceIdentifier);
+                    logger.LogError(ex, "Error uploading receipt for listing {ListingId}", listingId);
+                    return Results.Problem(title: "Receipt upload error", detail: ex.Message, statusCode: StatusCodes.Status500InternalServerError, instance: ctx.TraceIdentifier);
                 }
             })
             .RequireAuthorization()
-            .Accepts<ReceiptSubmitRequest>("application/json")
+            .DisableAntiforgery()
             .WithOpenApi(op =>
             {
-                op.OperationId = "Listings_ReceiptSubmit";
-                op.Summary = "Submit receipt";
-                op.Description = "Recycler submits the receipt image URL and reported amount for the listing.";
-                return op;
-            })
-            .Produces(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status400BadRequest)
-            .Produces(StatusCodes.Status401Unauthorized);
-
-            // Donator verifies receipt amount
-            group.MapPost("/receipt/verify", async (ReceiptVerifyRequest req, ClaimsPrincipal user, IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx) =>
-            {
-                var logger = lf.CreateLogger("Listings");
-                try
-                {
-                    var userId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
-                    if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
-                    var ok = await svc.VerifyReceiptAsync(req.ListingId, userId, req.VerifiedAmount, ctx.RequestAborted);
-                    if (!ok)
-                    {
-                        logger.LogWarning("Receipt verify failed for listing {ListingId} by user {UserId}", req.ListingId, userId);
-                        return Results.Problem(title: "Receipt verify failed", detail: "Listing not awaiting verification or invalid permissions.", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
-                    }
-                    logger.LogInformation("Receipt verified for listing {ListingId}", req.ListingId);
-                    return Results.Ok();
-                }
-                catch (Exception ex)
-                {
-                    logger.LogError(ex, "Error verifying receipt for listing {ListingId}", req.ListingId);
-                    return Results.Problem(title: "Receipt verify error", detail: ex.Message, statusCode: StatusCodes.Status500InternalServerError, instance: ctx.TraceIdentifier);
-                }
-            })
-            .RequireAuthorization("VerifiedDonator")
-            .Accepts<ReceiptVerifyRequest>("application/json")
-            .WithOpenApi(op =>
-            {
-                op.OperationId = "Listings_ReceiptVerify";
-                op.Summary = "Verify receipt amount";
-                op.Description = "Donator verifies the receipt amount reported by the recycler.";
+                op.OperationId = "Listings_ReceiptUpload";
+                op.Summary = "Upload receipt image";
+                op.Description = "Recycler uploads the receipt image as multipart/form-data with fields: listingId, reportedAmount, file. This does not affect listing status and is available even after completion.";
                 return op;
             })
             .Produces(StatusCodes.Status200OK)

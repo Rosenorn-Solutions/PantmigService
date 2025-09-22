@@ -64,6 +64,12 @@ namespace AuthService.Data
                 .WithMany()
                 .HasForeignKey(u => u.CityId)
                 .OnDelete(DeleteBehavior.SetNull);
+
+            // Unique phone number (ignore nulls)
+            builder.Entity<ApplicationUser>()
+                .HasIndex(u => u.PhoneNumber)
+                .IsUnique()
+                .HasFilter("[PhoneNumber] IS NOT NULL");
         }
     }
 }

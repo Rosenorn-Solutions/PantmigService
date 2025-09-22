@@ -17,9 +17,9 @@ namespace PantmigService.Services
         Task<bool> AcceptPickupAsync(int id, string donatorUserId, string recyclerUserId, CancellationToken ct = default);
         Task<IReadOnlyList<ApplicantInfo>?> GetApplicantsAsync(int id, string donatorUserId, CancellationToken ct = default);
         Task<bool> StartChatAsync(int id, string chatSessionId, CancellationToken ct = default);
-        Task<bool> ConfirmPickupAsync(int id, string recyclerUserId, CancellationToken ct = default);
-        Task<bool> SubmitReceiptAsync(int id, string recyclerUserId, string receiptImageUrl, decimal reportedAmount, CancellationToken ct = default);
-        Task<bool> VerifyReceiptAsync(int id, string donatorUserId, decimal verifiedAmount, CancellationToken ct = default);
+        // Pickup is now confirmed by the donator (owner) and completes the listing
+        Task<bool> ConfirmPickupAsync(int id, string donatorUserId, CancellationToken ct = default);
+        Task<bool> SubmitReceiptUploadAsync(int id, string recyclerUserId, string fileName, string contentType, byte[] data, decimal reportedAmount, CancellationToken ct = default);
         Task<bool> SetMeetingPointAsync(int id, string donatorUserId, decimal latitude, decimal longitude, CancellationToken ct = default);
         Task<bool> CancelAsync(int id, string donatorUserId, CancellationToken ct = default);
     }
