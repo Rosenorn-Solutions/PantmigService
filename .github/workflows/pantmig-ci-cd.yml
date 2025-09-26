@@ -1,0 +1,119 @@
+name: PantmigService & AuthService CI/CD
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+# Prevent overlapping deployments on rapid pushes
+concurrency:
+  group: pantmig-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+          cache: true
+
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build (Release)
+        run: dotnet build --no-restore -c Release
+
+      - name: Run tests
+        if: hashFiles('PantMigTesting/**/*.csproj') != ''
+        run: dotnet test PantMigTesting --no-build -c Release --verbosity normal
+
+      - name: Publish PantmigService
+        run: >-
+          dotnet publish PantmigService/PantmigService.csproj
+          -c Release
+          -o publish/PantmigService
+          /p:UseAppHost=false
+
+      - name: Publish AuthService
+        run: >-
+          dotnet publish AuthService/AuthService.csproj
+          -c Release
+          -o publish/AuthService
+          /p:UseAppHost=false
+
+      - name: Upload PantmigService artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PantmigService-build-artifact
+          path: publish/PantmigService
+          retention-days: 7
+
+      - name: Upload AuthService artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AuthService-build-artifact
+          path: publish/AuthService
+          retention-days: 7
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment: Development
+    if: github.event_name == 'push'
+    steps:
+      - name: Download PantmigService artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: PantmigService-build-artifact
+          path: ./PantmigService-artifact
+
+      - name: Download AuthService artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: AuthService-build-artifact
+          path: ./AuthService-artifact
+
+      # Adjust remote target paths & service names to match your server configuration
+      - name: Deploy PantmigService via SCP
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ vars.SERVER_NAME }}
+          username: ${{ vars.SERVER_USER }}
+          key: ${{ secrets.SERVER_ROOT_CERTIFICATE }}
+          source: "./PantmigService-artifact/*"
+          target: "/var/www/pantmig/api/publish"
+          strip_components: 1
+
+      - name: Deploy AuthService via SCP
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ vars.SERVER_NAME }}
+          username: ${{ vars.SERVER_USER }}
+          key: ${{ secrets.SERVER_ROOT_CERTIFICATE }}
+          source: "./AuthService-artifact/*"
+          target: "/var/www/pantmig/auth/publish"
+          strip_components: 1
+
+      - name: Post-deployment restart & status
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ vars.SERVER_NAME }}
+          username: ${{ vars.SERVER_USER }}
+          key: ${{ secrets.SERVER_ROOT_CERTIFICATE }}
+          script: |
+            echo "Deployment completed on $(date)";
+            echo "Restarting Pantmig API service";
+            sudo systemctl restart pantmigapi.service || echo "pantmigapi.service restart failed";
+            echo "Restarting Auth API service";
+            sudo systemctl restart authapi.service || echo "authapi.service restart failed";
+            echo "Pantmig API status:";
+            sudo systemctl status pantmigapi.service --no-pager || true;
+            echo "Auth API status:";
+            sudo systemctl status authapi.service --no-pager || true;

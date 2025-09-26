@@ -1,157 +1,81 @@
-PantmigService
+# Pantmig Service
 
-An ASP.NET Core (.NET 9, C# 13) backend for coordinating recycling handoffs between donators and recyclers. It exposes minimal APIs for listing lifecycle, uses EF Core with SQL Server, and provides real-time chat via SignalR.
+## Recycle Listing Workflow (Updated)
 
-Projects
-- PantmigService: Main Web API and SignalR hub
-- AuthService: Auth-related project (if used separately)
-- PantMigTesting: xUnit integration/unit tests
+This document describes the current recycle listing workflow after refactoring.
 
-Tech
-- ASP.NET Core Minimal APIs + Swagger
-- EF Core (SQL Server)
-- SignalR (WebSockets)
-- JWT Bearer authentication
+### Overview
+A Donator publishes a listing that Recyclers can request. Once a Donator accepts a Recycler, they start a chat, set a meeting point and finally confirm the pickup. The pickup confirmation now completes (finalizes) the listing. A Recycler may optionally upload a receipt image afterwards for record keeping – uploading a receipt does not alter the listing status.
 
-Prerequisites
-- .NET 9 SDK
-- SQL Server (LocalDB or full SQL Server)
+### States (Enum `ListingStatus`)
+The enum still contains historical values but only these transitions are active now:
 
-Quick start
-1) Clone and open the solution.
-2) Configure appsettings.json in PantmigService with a connection string and JWT settings:
-{
-  "ConnectionStrings": {
-    "PantmigConnection": "Server=(localdb)\\MSSQLLocalDB;Database=PantmigDb;Trusted_Connection=True;MultipleActiveResultSets=true;TrustServerCertificate=True"
-  },
-  "Jwt": {
-    "Issuer": "your-issuer",
-    "Audience": "your-audience",
-    "SecretKey": "your-very-long-secret"
-  }
-}
-3) Apply database migrations (first restore and build):
-- dotnet restore
-- dotnet build -c Debug
-- dotnet ef database update --project PantmigService
-4) Run the API:
-- dotnet run --project PantmigService
-5) Browse Swagger UI:
-- https://localhost:5001/swagger (port may differ)
+```
+Created -> PendingAcceptance -> Accepted -> Completed (at pickup confirm)
+```
 
-Database and migrations
-- Migrations live in PantmigService/Migrations
-- Example migration: 20250831144839_RecycleMeetingPoint adds meeting point columns to RecycleListings
-- Create a new migration:
-  - dotnet ef migrations add <Name> --project PantmigService
-- Update database:
-  - dotnet ef database update --project PantmigService
+Other enum values (`PickedUp`, `AwaitingVerification`) remain for backward compatibility but are not used by the new flow. They may be removed in a future migration if desired.
 
-Postal code seeding (optional)
-- On startup, PantmigService attempts to seed postal codes from a CSV at the app base directory: postal_codes_da.csv
-- Supported CSV formats (headers optional, lines starting with # ignored):
-  - CityName,PostalCode
-  - PostalCode,CityName
-- To force reseed even when data exists: set env var PANTMIG_FORCE_POSTAL_SEED=true
+### Endpoint Flow
+1. POST /listings
+   - Donator (policy: VerifiedDonator) creates a listing (Status: Created)
+2. POST /listings/pickup/request
+   - Recycler requests pickup; first request moves status to PendingAcceptance
+3. GET /listings/{id}/applicants
+   - Donator views list of applicants
+4. POST /listings/pickup/accept
+   - Donator accepts a Recycler (Status: Accepted)
+5. POST /listings/chat/start
+   - Donator or assigned Recycler starts a chat (chatSessionId stored)
+6. POST /listings/meeting/set
+   - Donator sets meeting point (latitude/longitude)
+7. POST /listings/pickup/confirm
+   - Donator confirms pickup; this now directly sets Status = Completed, IsActive = false
 
-Authentication
-- JWT Bearer is required for protected endpoints
-- Provide a token with sub (or nameidentifier) claim
-- Some endpoints require policy: VerifiedDonator
-- For SignalR, access_token can be passed in query string when connecting to /hubs/chat
+### Optional Receipt Handling
+- POST /listings/receipt/upload (multipart/form-data)
+  - Allowed any time after a Recycler has been assigned (even after completion)
+  - Stores binary data (and reported amount) but does not change listing status
+  - Only checks that the caller is the assigned Recycler and the file passes antivirus scan
 
-SignalR
-- Hub path: /hubs/chat
-- JWT is read from access_token in query string for WebSockets
+### Removed Endpoints
+- POST /listings/receipt/submit (URL based)
+- POST /listings/receipt/verify
+- POST /listings/finalize (pickup confirmation replaces finalize)
 
-API overview (base: /listings)
-- GET /listings
-  - Returns active listings
+### Still Available Utility Endpoints
+- GET /listings (active listings)
+- GET /listings/my-applications (Recycler)
+- GET /listings/my-listings (Donator)
 - GET /listings/{id}
-  - Returns a listing by id
-- POST /listings (VerifiedDonator)
-  - Body: { title, description, city?, location?, estimatedValue?, estimatedAmount, availableFrom, availableTo }
-  - Creates a listing
-- POST /listings/pickup/request (Authenticated)
-  - Body: { listingId }
-  - Recycler requests pickup. Adds the recycler to the applicants list and moves listing to PendingAcceptance.
-- GET /listings/{id}/applicants (VerifiedDonator; must be creator)
-  - Returns: [ "recyclerUserId1", "recyclerUserId2", ... ]
-  - Donator views the list of applicants for the listing.
-- POST /listings/pickup/accept (VerifiedDonator; must be creator)
-  - Body: { listingId, recyclerUserId }
-  - Donator accepts a selected applicant. Assigns AssignedRecyclerUserId and moves to Accepted.
-- POST /listings/chat/start (Authenticated; only donator or assigned recycler)
-  - Body: { listingId }
-  - Starts direct chat for the listing
-- POST /listings/meeting/set (VerifiedDonator; requires chat started)
-  - Body: { listingId, latitude, longitude }
-  - Sets meeting point
-- POST /listings/pickup/confirm (Authenticated; assigned recycler only)
-  - Body: { listingId }
-  - Recycler confirms pickup
-- POST /listings/receipt/submit (Authenticated; assigned recycler only)
-  - Body: { listingId, receiptImageUrl, reportedAmount }
-- POST /listings/receipt/verify (VerifiedDonator)
-  - Body: { listingId, verifiedAmount }
+- POST /listings/cancel (Donator can cancel if not already terminal)
 
-End-to-end workflow (updated)
-- 1. Create listing (donator)
-  - Endpoint: POST /listings (VerifiedDonator)
-  - State: Created, IsActive = true
-  - Visible in GET /listings
-- 2. Request pickup (recycler)
-  - Endpoint: POST /listings/pickup/request (Auth)
-  - Adds recycler to applicants, State: PendingAcceptance
-  - Listing is no longer returned by GET /listings
-- 2.5 View applicants (donator)
-  - Endpoint: GET /listings/{id}/applicants (VerifiedDonator, creator)
-  - Donator reviews applicants list
-- 3. Accept pickup (donator)
-  - Endpoint: POST /listings/pickup/accept (VerifiedDonator, creator)
-  - Body includes recyclerUserId of the chosen applicant
-  - State: Accepted, AcceptedAt set; AssignedRecyclerUserId set
-- 4. Start chat (donator or assigned recycler)
-  - Endpoint: POST /listings/chat/start (Auth, participants only)
-  - Sets ChatSessionId = "listing-{id}"
-- 4.1 Set meeting point (donator)
-  - Endpoint: POST /listings/meeting/set (VerifiedDonator, creator; requires chat started)
-  - Sets MeetingLatitude, MeetingLongitude, MeetingSetAt
-- 5. Confirm pickup (assigned recycler)
-  - Endpoint: POST /listings/pickup/confirm (Auth; assigned recycler)
-  - State: PickedUp, PickupConfirmedAt set
-- 6. Submit receipt (assigned recycler)
-  - Endpoint: POST /listings/receipt/submit (Auth; assigned recycler)
-  - Sets ReceiptImageUrl, ReportedAmount; State: AwaitingVerification
-- 7. Verify receipt (donator)
-  - Endpoint: POST /listings/receipt/verify (VerifiedDonator, creator)
-  - Sets VerifiedAmount, CompletedAt; State: Completed, IsActive = false
+### Service Interface Changes
+Removed methods:
+- SubmitReceiptAsync
+- VerifyReceiptAsync
+- FinalizeAsync
 
-Model updates (applicants)
-- RecycleListing now has Applicants (collection of RecycleListingApplicant) and a convenience AppliedForRecyclementUserIdList (not mapped) listing applicant user IDs.
-- New entity RecycleListingApplicant with unique index on (ListingId, RecyclerUserId) prevents duplicate applications.
-- DbContext has DbSet<RecycleListingApplicant> and configured relationships with cascade delete.
+Modified behavior:
+- ConfirmPickupAsync now completes the listing.
+- SubmitReceiptUploadAsync only stores receipt data; no state transition.
 
-Testing
-- Run all tests: dotnet test
-- PantMigTesting includes end-to-end tests that drive the minimal APIs and exercise the updated applicants flow
+### Data Model Notes
+The entity still contains fields for receipt verification and intermediate states (e.g. VerifiedAmount, Status values). They are unused by the new flow but retained to avoid immediate migrations. A future cleanup might:
+- Remove unused enum members
+- Drop VerifiedAmount / receipt verification fields
+- Rename fields to reflect simplified workflow
 
-Configuration notes
-- Swagger is enabled in Development
-- Connection string key: ConnectionStrings:PantmigConnection
-- JWT configuration must match Program.cs expectations (Issuer, Audience, SecretKey)
+### Tests
+Tests were updated to reflect the new completion point at pickup confirmation and removal of receipt submit / verify / finalize flows.
 
-Repository structure (key folders)
-- PantmigService/
-  - Endpoints/ (Minimal APIs)
-  - Services/ (Business logic)
-  - Entities/ (EF entities)
-  - Data/ (DbContext)
-  - Hubs/ (SignalR ChatHub)
-  - Seed/ (CSV seeding)
-  - Migrations/
-- PantMigTesting/ (tests)
-- AuthService/ (auth project)
+### Future Cleanup (Optional)
+If you want to fully streamline the model:
+- Remove ListingStatus values PickedUp and AwaitingVerification
+- Remove VerifiedAmount and any verification timestamps
+- Possibly collapse PickupConfirmedAt and CompletedAt into one field
 
-License
-- Add your preferred license.
+Open an issue or task before performing that migration.
+
+---
+Last updated: refactor to immediate completion on pickup confirmation.
