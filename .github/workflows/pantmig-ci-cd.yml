@@ -112,9 +112,10 @@ jobs:
             echo "Restarting Pantmig API service";
             sudo systemctl restart pantmigapi.service || echo "pantmigapi.service restart failed";
             echo "Restarting Auth API service";
-            sudo systemctl restart authapi.service || echo "authapi.service restart failed";
+            sudo systemctl restart pantmigauth.service || echo "pantmigauth.service restart failed";
             echo "Pantmig API status:";
             sudo systemctl status pantmigapi.service --no-pager || true;
             echo "Auth API status:";
-            sudo systemctl status authapi.service --no-pager || true;
+            sudo systemctl status pantmigauth.service --no-pager || true;
+
 
