@@ -20,7 +20,6 @@ namespace PantmigService.Entities
         public string Description { get; set; } = string.Empty;
         public string Location { get; set; } = string.Empty;
         public decimal? EstimatedValue { get; set; }
-        public string? EstimatedAmount { get; set; }
         public DateTime AvailableFrom { get; set; }
         public DateTime AvailableTo { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
@@ -55,6 +54,22 @@ namespace PantmigService.Entities
 
         // Applicants for this listing
         public ICollection<RecycleListingApplicant> Applicants { get; set; } = [];
+
+        // Structured content items (plastic bottles, glass bottles, cans, etc.)
+        public ICollection<RecycleListingItem> Items { get; set; } = [];
+
+        // Approximate worth based on average deposit per item (2.33)
+        [NotMapped]
+        public decimal ApproximateWorth
+        {
+            get
+            {
+                if (Items is null || Items.Count == 0) return 0m;
+                var totalUnits = Items.Sum(i => i.Quantity);
+                const decimal AVERAGE_DEPOSIT = 2.33m; // Approx between 1.5 and 3
+                return Math.Round(totalUnits * AVERAGE_DEPOSIT, 2, MidpointRounding.AwayFromZero);
+            }
+        }
 
         // Convenience property
         [NotMapped]

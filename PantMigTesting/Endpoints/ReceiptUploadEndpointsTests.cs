@@ -35,10 +35,9 @@ public class ReceiptUploadEndpointsTests
             Title = "Cans",
             Description = "Bag of cans",
             City = "CPH",
-            EstimatedValue = (decimal?)null,
-            EstimatedAmount = "50",
             AvailableFrom = DateTime.UtcNow,
-            AvailableTo = DateTime.UtcNow.AddHours(2)
+            AvailableTo = DateTime.UtcNow.AddHours(2),
+            Items = new[] { new { Type = 3, Quantity = 50 } } // Can
         });
         createResp.EnsureSuccessStatusCode();
         var listing = await createResp.Content.ReadFromJsonAsync<RecycleListing>();
@@ -130,10 +129,9 @@ public class ReceiptUploadEndpointsTests
             Title = "E2E infected test",
             Description = "Should be blocked",
             City = "CPH",
-            EstimatedValue = (decimal?)null,
-            EstimatedAmount = "1",
             AvailableFrom = DateTime.UtcNow,
-            AvailableTo = DateTime.UtcNow.AddHours(1)
+            AvailableTo = DateTime.UtcNow.AddHours(1),
+            Items = new[] { new { Type = 3, Quantity = 1 } } // Can
         });
         createResp.EnsureSuccessStatusCode();
         var listing = await createResp.Content.ReadFromJsonAsync<RecycleListing>();

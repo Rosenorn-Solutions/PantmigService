@@ -7,6 +7,7 @@ using PantmigService.Entities;
 using PantmigService.Services;
 using Xunit;
 using Microsoft.Extensions.Logging.Abstractions;
+using System.Collections.Generic;
 
 namespace PantMigTesting.Services
 {
@@ -22,22 +23,43 @@ namespace PantMigTesting.Services
 
         private static RecycleListingService CreateService(PantmigDbContext db) => new(db, NullLogger<RecycleListingService>.Instance);
 
-        private static RecycleListing NewListing(string donatorId = "donator-1", DateTime? createdAt = null, bool isActive = true, ListingStatus status = ListingStatus.Created)
+        private static RecycleListing NewListing(string donatorId = "donator-1", DateTime? createdAt = null, bool isActive = true, ListingStatus status = ListingStatus.Created, int quantity = 50)
             => new()
             {
                 Title = "Cans",
                 Description = "Bag of cans",
                 Location = "Copenhagen",
-                EstimatedValue = null, // now decimal?
-                EstimatedAmount = "50", // now string?
+                EstimatedValue = null,
                 AvailableFrom = DateTime.UtcNow.AddHours(-1),
                 AvailableTo = DateTime.UtcNow.AddHours(2),
                 CreatedByUserId = donatorId,
                 CreatedAt = createdAt ?? DateTime.UtcNow,
                 IsActive = isActive,
                 Status = status,
-                CityId = 1
+                CityId = 1,
+                Items =
+                [
+                    new() { MaterialType = RecycleMaterialType.Can, Quantity = quantity }
+                ]
             };
+
+        [Fact]
+        public void ApproximateWorth_Computes_Correctly()
+        {
+            var listing = NewListing(quantity: 10); // 10 * 2.33 = 23.30
+            Assert.Equal(23.30m, listing.ApproximateWorth);
+
+            listing.Items.Add(new RecycleListingItem { MaterialType = RecycleMaterialType.PlasticBottle, Quantity = 5 }); // total 15 * 2.33 = 34.95
+            Assert.Equal(34.95m, listing.ApproximateWorth);
+        }
+
+        [Fact]
+        public void ApproximateWorth_Zero_When_No_Items()
+        {
+            var listing = NewListing(quantity: 0);
+            listing.Items.Clear();
+            Assert.Equal(0m, listing.ApproximateWorth);
+        }
 
         [Fact]
         public async Task CreateAsync_Persists_Listing()
@@ -84,7 +106,6 @@ namespace PantMigTesting.Services
             using var db = CreateDb();
             var svc = CreateService(db);
 
-            //Show
             var older = await svc.CreateAsync(NewListing(createdAt: DateTime.UtcNow.AddHours(-3)));
             var newest = await svc.CreateAsync(NewListing(createdAt: DateTime.UtcNow));
             var pending = await svc.CreateAsync(NewListing(status: ListingStatus.PendingAcceptance, createdAt: DateTime.UtcNow.AddHours(-2)));

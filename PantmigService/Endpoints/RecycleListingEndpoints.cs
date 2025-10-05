@@ -8,12 +8,14 @@ using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Antiforgery;
 using PantmigService.Security;
+using PantmigService.Endpoints;
 
 namespace PantmigService.Endpoints
 {
     public static class RecycleListingEndpoints
     {
-        public record CreateRecycleListingRequest(string Title, string Description, string? City, string? Location, decimal? EstimatedValue, string? EstimatedAmount, DateTime AvailableFrom, DateTime AvailableTo);
+        public record CreateRecycleListingItemRequest(RecycleMaterialType Type, int Quantity, string? DepositClass, decimal? EstimatedDepositPerUnit);
+        public record CreateRecycleListingRequest(string Title, string Description, string? City, string? Location, DateTime AvailableFrom, DateTime AvailableTo, List<CreateRecycleListingItemRequest> Items);
         public record PickupRequest(int ListingId);
         public record AcceptRequest(int ListingId, string RecyclerUserId);
         public record ChatStartRequest(int ListingId);
@@ -33,7 +35,7 @@ namespace PantmigService.Endpoints
                 try
                 {
                     var data = await svc.GetActiveAsync(ctx.RequestAborted);
-                    return Results.Ok(data);
+                    return Results.Ok(data.ToResponse());
                 }
                 catch (Exception ex)
                 {
@@ -49,7 +51,7 @@ namespace PantmigService.Endpoints
                     return op;
                 })
                 .RequireAuthorization()
-                .Produces<IEnumerable<RecycleListing>>(StatusCodes.Status200OK, contentType: "application/json");
+                .Produces<IEnumerable<RecycleListingResponse>>(StatusCodes.Status200OK, contentType: "application/json");
 
             // My applications (recycler)
             group.MapGet("/my-applications", async (ClaimsPrincipal user, IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx) =>
@@ -64,7 +66,7 @@ namespace PantmigService.Endpoints
                         return Results.Unauthorized();
                     }
                     var items = await svc.GetAppliedByRecyclerAsync(userId, ctx.RequestAborted);
-                    return Results.Ok(items);
+                    return Results.Ok(items.ToResponse());
                 }
                 catch (Exception ex)
                 {
@@ -80,7 +82,7 @@ namespace PantmigService.Endpoints
                 op.Description = "Returns all listings the authenticated recycler has applied to.";
                 return op;
             })
-            .Produces<IEnumerable<RecycleListing>>(StatusCodes.Status200OK, contentType: "application/json")
+            .Produces<IEnumerable<RecycleListingResponse>>(StatusCodes.Status200OK, contentType: "application/json")
             .Produces(StatusCodes.Status401Unauthorized);
 
             // My listings (donator)
@@ -97,7 +99,7 @@ namespace PantmigService.Endpoints
                     }
                     // Returns all listings for this user regardless of status
                     var items = await svc.GetByUserAsync(userId, ctx.RequestAborted);
-                    return Results.Ok(items);
+                    return Results.Ok(items.ToResponse());
                 }
                 catch (Exception ex)
                 {
@@ -113,7 +115,7 @@ namespace PantmigService.Endpoints
                 op.Description = "Returns all listings created by the authenticated donator, including cancelled and completed.";
                 return op;
             })
-            .Produces<IEnumerable<RecycleListing>>(StatusCodes.Status200OK, contentType: "application/json")
+            .Produces<IEnumerable<RecycleListingResponse>>(StatusCodes.Status200OK, contentType: "application/json")
             .Produces(StatusCodes.Status401Unauthorized);
 
             group.MapGet("/{id:int}", async (int id, IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx) =>
@@ -127,7 +129,7 @@ namespace PantmigService.Endpoints
                         logger.LogWarning("Listing {ListingId} not found", id);
                         return Results.NotFound(new { error = "Listing not found" });
                     }
-                    return Results.Ok(item);
+                    return Results.Ok(item.ToResponse());
                 }
                 catch (Exception ex)
                 {
@@ -143,7 +145,7 @@ namespace PantmigService.Endpoints
                 return op;
             })
             .RequireAuthorization()
-            .Produces<RecycleListing>(StatusCodes.Status200OK, contentType: "application/json")
+            .Produces<RecycleListingResponse>(StatusCodes.Status200OK, contentType: "application/json")
             .Produces(StatusCodes.Status404NotFound);
 
             // Donator creates listing
@@ -171,26 +173,65 @@ namespace PantmigService.Endpoints
                         return Results.Problem(title: "Validation error", detail: "AvailableTo must be after AvailableFrom", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
                     }
 
+                    if (req.Items is null || req.Items.Count == 0)
+                    {
+                        return Results.Problem(title: "Validation error", detail: "At least one item is required", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
+                    }
+
+                    // Validation: each quantity > 0
+                    foreach (var it in req.Items)
+                    {
+                        if (it.Quantity <= 0)
+                        {
+                            return Results.Problem(title: "Validation error", detail: "All item quantities must be greater than zero", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
+                        }
+                        if (it.Quantity > 10_000)
+                        {
+                            return Results.Problem(title: "Validation error", detail: "Item quantity too large", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
+                        }
+                    }
+
                     var cityId = await cityResolver.ResolveOrCreateAsync(cityInput, ctx.RequestAborted);
+
+                    // Compute estimated value if per-unit deposits provided
+                    decimal? estimatedValue = null;
+                    if (req.Items.Any(i => i.EstimatedDepositPerUnit.HasValue))
+                    {
+                        decimal sum = 0;
+                        foreach (var i in req.Items)
+                        {
+                            if (i.EstimatedDepositPerUnit.HasValue)
+                            {
+                                sum += i.EstimatedDepositPerUnit.Value * i.Quantity;
+                            }
+                        }
+                        estimatedValue = sum;
+                    }
 
                     var listing = new RecycleListing
                     {
                         Title = req.Title,
                         Description = req.Description,
-                        EstimatedValue = req.EstimatedValue,
-                        EstimatedAmount = req.EstimatedAmount,
+                        EstimatedValue = estimatedValue,
                         AvailableFrom = req.AvailableFrom,
                         AvailableTo = req.AvailableTo,
                         CreatedByUserId = userId,
                         CreatedAt = DateTime.UtcNow,
                         IsActive = true,
                         Status = ListingStatus.Created,
-                        CityId = cityId
+                        CityId = cityId,
+                        Items = [.. req.Items.Select(i => new RecycleListingItem
+                        {
+                            MaterialType = i.Type,
+                            Quantity = i.Quantity,
+                            DepositClass = i.DepositClass,
+                            EstimatedDepositPerUnit = i.EstimatedDepositPerUnit
+                        })]
                     };
 
                     var created = await svc.CreateAsync(listing, ctx.RequestAborted);
                     logger.LogInformation("Listing {ListingId} created by {UserId}", created.Id, userId);
-                    return Results.Created($"/listings/{created.Id}", created);
+                    return Results.Created($"/listings/{created.Id}", created.ToResponse());
                 }
                 catch (Exception ex)
                 {
@@ -204,10 +245,10 @@ namespace PantmigService.Endpoints
             {
                 op.OperationId = "Listings_Create";
                 op.Summary = "Create a new listing";
-                op.Description = "Creates a new recycle listing. Requires a verified Donator.";
+                op.Description = "Creates a new recycle listing with structured item contents. Requires a verified Donator.";
                 return op;
             })
-            .Produces<RecycleListing>(StatusCodes.Status201Created, contentType: "application/json")
+            .Produces<RecycleListingResponse>(StatusCodes.Status201Created, contentType: "application/json")
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized);
 
@@ -261,7 +302,7 @@ namespace PantmigService.Endpoints
                         logger.LogWarning("Applicants retrieval failed for listing {ListingId} by user {UserId}", id, userId);
                         return Results.Problem(title: "Cannot retrieve applicants", detail: "Listing not found, inactive, or you are not the owner.", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
                     }
-                    var result = list ?? Array.Empty<ApplicantInfo>();
+                    var result = list ?? [];
                     return Results.Ok(result);
                 }
                 catch (Exception ex)
@@ -468,7 +509,6 @@ namespace PantmigService.Endpoints
                     {
                         return Results.Problem(title: "Validation error", detail: "Receipt file is required", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
                     }
-                    // Optional: basic content-type guard
                     if (!string.IsNullOrEmpty(file.ContentType) && !file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
                     {
                         return Results.Problem(title: "Validation error", detail: "Only image files are allowed", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
@@ -478,7 +518,6 @@ namespace PantmigService.Endpoints
                     await file.CopyToAsync(ms, ctx.RequestAborted);
                     ms.Position = 0;
 
-                    // Antivirus scan
                     var scan = await av.ScanAsync(ms, file.FileName, ctx.RequestAborted);
                     if (scan.Status == AntivirusScanStatus.Infected)
                     {
