@@ -17,6 +17,11 @@ namespace AuthService.Entities
         public string? MitId { get; set; } = string.Empty;
         public UserType UserType { get; set; } = UserType.Recycler;
 
+        // New demographic fields
+        public Gender Gender { get; set; } = Gender.Unknown;
+        // Stored as SQL 'date'; optional at registration
+        public DateOnly? BirthDate { get; set; }
+
         // Optional link to the city (Bopæls by)
         public int? CityId { get; set; }
         public City? City { get; set; }

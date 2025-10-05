@@ -76,7 +76,9 @@ namespace AuthService.Endpoints
                     RefreshToken = refresh,
                     UserType = user.UserType,
                     CityId = user.CityId,
-                    CityName = cityName ?? user.City?.Name
+                    CityName = cityName ?? user.City?.Name,
+                    Gender = user.Gender,
+                    BirthDate = user.BirthDate
                 };
                 return Results.Ok(new RegisterResult { Success = true, AuthResponse = resp });
             })
@@ -113,7 +115,9 @@ namespace AuthService.Endpoints
                     RefreshToken = refresh,
                     UserType = user.UserType,
                     CityId = user.CityId,
-                    CityName = user.City?.Name
+                    CityName = user.City?.Name,
+                    Gender = user.Gender,
+                    BirthDate = user.BirthDate
                 };
 
                 return Results.Ok(new LoginResult { Success = true, AuthResponse = resp });
@@ -176,6 +180,13 @@ namespace AuthService.Endpoints
                                               .FirstOrDefaultAsync();
                 }
 
+                // Fetch gender and birthdate from claims if present
+                var genderClaim = user.FindFirst("gender")?.Value;
+                var birthDateClaim = user.FindFirst("birthDate")?.Value;
+                Gender gender = Enum.TryParse<Gender>(genderClaim, out var g) ? g : Gender.Unknown;
+                DateOnly? birthDate = null;
+                if (DateOnly.TryParse(birthDateClaim, out var bd)) birthDate = bd;
+
                 var dto = new UserInformationDTO
                 {
                     Id = userId,
@@ -185,7 +196,9 @@ namespace AuthService.Endpoints
                     LastName = user.FindFirstValue(ClaimTypes.Surname) ?? string.Empty,
                     CityId = cityId,
                     CityName = cityName,
-                    Rating = rating
+                    Rating = rating,
+                    Gender = gender,
+                    BirthDate = birthDate
                 };
                 return Results.Ok(dto);
             })
@@ -206,7 +219,6 @@ namespace AuthService.Endpoints
                 var user = await db.Users.Include(u => u.City).AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
                 if (user is null) return Results.NotFound();
 
-                // cache rating
                 var key = $"rating:{user.Id}";
                 cache.Set(key, user.Rating, GetRatingTtl(config));
 
@@ -221,7 +233,9 @@ namespace AuthService.Endpoints
                     CreatedAt = user.CreatedAt,
                     CityId = user.CityId,
                     CityName = user.City?.Name,
-                    Rating = user.Rating
+                    Rating = user.Rating,
+                    Gender = user.Gender,
+                    BirthDate = user.BirthDate
                 };
                 return Results.Ok(new UserInformationResult { Success = true, UserInformation = dto });
             })

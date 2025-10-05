@@ -15,5 +15,9 @@
         public string? CityName { get; set; }
 
         public decimal Rating { get; set; }
+
+        // New demographic fields
+        public Gender Gender { get; set; }
+        public DateOnly? BirthDate { get; set; }
     }
 }

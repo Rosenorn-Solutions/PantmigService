@@ -55,7 +55,9 @@ namespace AuthService.Services
                 MitId = req.MitId,
                 IsMitIdVerified = false,
                 UserType = req.UserType,
-                CityId = cityId
+                CityId = cityId,
+                Gender = req.Gender,
+                BirthDate = req.BirthDate
             };
 
             var create = await userManager.CreateAsync(user, req.Password);

@@ -44,16 +44,19 @@ namespace AuthService.Services
                 new(ClaimTypes.MobilePhone, user.PhoneNumber ?? string.Empty),
                 new("userType", user.UserType.ToString()),
                 new("isMitIdVerified", user.IsMitIdVerified.ToString()),
-                // New: standard role claim so [Authorize(Roles = ...)] works
-                new(ClaimTypes.Role, user.UserType.ToString())
+                new(ClaimTypes.Role, user.UserType.ToString()),
+                // New demographic claims
+                new("gender", user.Gender.ToString())
             };
+
+            if (user.BirthDate.HasValue)
+            {
+                claims.Add(new Claim("birthDate", user.BirthDate.Value.ToString("yyyy-MM-dd")));
+            }
 
             if (user.CityId.HasValue)
             {
                 claims.Add(new Claim("cityId", user.CityId.Value.ToString()));
-
-                // Optionally add city name to avoid DB lookup in /me
-                // Only if we have it loaded
                 if (user.City is not null && !string.IsNullOrWhiteSpace(user.City.Name))
                 {
                     claims.Add(new Claim("cityName", user.City.Name));
@@ -114,7 +117,6 @@ namespace AuthService.Services
                 if (user is null) return (null, "User not found");
 
                 var (newAccess, exp) = GenerateAccessToken(user);
-                // Optionally rotate refresh token here
                 return (new AuthResponse
                 {
                     UserId = user.Id,
@@ -127,7 +129,9 @@ namespace AuthService.Services
                     RefreshToken = refreshToken,
                     UserType = user.UserType,
                     CityId = user.CityId,
-                    CityName = user.City?.Name
+                    CityName = user.City?.Name,
+                    Gender = user.Gender,
+                    BirthDate = user.BirthDate
                 }, null);
             }
             catch (Exception ex)

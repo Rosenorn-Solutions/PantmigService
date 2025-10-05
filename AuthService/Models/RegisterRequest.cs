@@ -11,6 +11,10 @@
         // New: role selection at registration
         public UserType UserType { get; set; } = UserType.Recycler;
 
+        // New demographic fields (optional)
+        public Gender Gender { get; set; } = Gender.Unknown;
+        public DateOnly? BirthDate { get; set; }
+
         // Optional: City (Bopæls by)
         public string? City { get; set; }
     }
