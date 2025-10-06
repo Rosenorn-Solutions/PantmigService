@@ -10,10 +10,11 @@
         public string AccessToken { get; set; } = string.Empty;
         public string RefreshToken { get; set; } = string.Empty;
         public DateTime AccessTokenExpiration { get; set; }
-        public string? LinkedInId { get; set; }
-        public string? FindJobNuUri { get; set; }
-        // New: echo back assigned role
         public UserType UserType { get; set; }
+
+        // New demographic fields
+        public Gender Gender { get; set; }
+        public DateOnly? BirthDate { get; set; }
 
         // Optional city info for convenience
         public int? CityId { get; set; }

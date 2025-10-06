@@ -12,15 +12,15 @@ using PantmigService.Data;
 namespace PantmigService.Migrations
 {
     [DbContext(typeof(PantmigDbContext))]
-    [Migration("20250831142420_RemovePostalFromCity")]
-    partial class RemovePostalFromCity
+    [Migration("20251006202029_InitialCreate")]
+    partial class InitialCreate
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.8")
+                .HasAnnotation("ProductVersion", "9.0.9")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -145,12 +145,9 @@ namespace PantmigService.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<decimal>("EstimatedAmount")
+                    b.Property<decimal?>("EstimatedValue")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("EstimatedValue")
-                        .HasColumnType("nvarchar(max)");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("bit");
@@ -159,8 +156,28 @@ namespace PantmigService.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<decimal?>("MeetingLatitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)");
+
+                    b.Property<decimal?>("MeetingLongitude")
+                        .HasPrecision(9, 6)
+                        .HasColumnType("decimal(9,6)");
+
+                    b.Property<DateTime?>("MeetingSetAt")
+                        .HasColumnType("datetime2");
+
                     b.Property<DateTime?>("PickupConfirmedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<byte[]>("ReceiptImageBytes")
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<string>("ReceiptImageContentType")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("ReceiptImageFileName")
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("ReceiptImageUrl")
                         .HasColumnType("nvarchar(max)");
@@ -184,13 +201,106 @@ namespace PantmigService.Migrations
 
                     b.HasIndex("CreatedByUserId");
 
-                    b.HasIndex("EstimatedAmount");
+                    b.HasIndex("EstimatedValue");
 
                     b.HasIndex("CityId", "AvailableFrom", "AvailableTo");
 
                     b.HasIndex("IsActive", "Status", "CityId", "AvailableFrom");
 
                     b.ToTable("RecycleListings");
+                });
+
+            modelBuilder.Entity("PantmigService.Entities.RecycleListingApplicant", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("AppliedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("ListingId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("RecyclerUserId")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ListingId", "RecyclerUserId")
+                        .IsUnique();
+
+                    b.ToTable("RecycleListingApplicants");
+                });
+
+            modelBuilder.Entity("PantmigService.Entities.RecycleListingImage", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<byte[]>("Data")
+                        .IsRequired()
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("ListingId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ListingId", "Order");
+
+                    b.ToTable("RecycleListingImages");
+                });
+
+            modelBuilder.Entity("PantmigService.Entities.RecycleListingItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("DepositClass")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<decimal?>("EstimatedDepositPerUnit")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("ListingId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("MaterialType")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ListingId", "MaterialType", "DepositClass");
+
+                    b.ToTable("RecycleListingItems");
                 });
 
             modelBuilder.Entity("PantmigService.Entities.CityPostalCode", b =>
@@ -213,6 +323,48 @@ namespace PantmigService.Migrations
                         .IsRequired();
 
                     b.Navigation("City");
+                });
+
+            modelBuilder.Entity("PantmigService.Entities.RecycleListingApplicant", b =>
+                {
+                    b.HasOne("PantmigService.Entities.RecycleListing", "Listing")
+                        .WithMany("Applicants")
+                        .HasForeignKey("ListingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Listing");
+                });
+
+            modelBuilder.Entity("PantmigService.Entities.RecycleListingImage", b =>
+                {
+                    b.HasOne("PantmigService.Entities.RecycleListing", "Listing")
+                        .WithMany("Images")
+                        .HasForeignKey("ListingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Listing");
+                });
+
+            modelBuilder.Entity("PantmigService.Entities.RecycleListingItem", b =>
+                {
+                    b.HasOne("PantmigService.Entities.RecycleListing", "Listing")
+                        .WithMany("Items")
+                        .HasForeignKey("ListingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Listing");
+                });
+
+            modelBuilder.Entity("PantmigService.Entities.RecycleListing", b =>
+                {
+                    b.Navigation("Applicants");
+
+                    b.Navigation("Images");
+
+                    b.Navigation("Items");
                 });
 #pragma warning restore 612, 618
         }

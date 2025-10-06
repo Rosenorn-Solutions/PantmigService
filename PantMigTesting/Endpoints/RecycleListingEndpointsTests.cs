@@ -1,7 +1,3 @@
-using System.Net;
-using System.Net.Http.Json;
-using System.Security.Claims;
-using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -12,9 +8,14 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using PantmigService.Data;
 using PantmigService.Endpoints;
+using PantmigService.Endpoints.Helpers;
 using PantmigService.Entities;
-using PantmigService.Services;
 using PantmigService.Security;
+using PantmigService.Services;
+using System.Net;
+using System.Net.Http.Json;
+using System.Security.Claims;
+using System.Text.Encodings.Web;
 
 namespace PantMigTesting.Endpoints
 {
@@ -94,9 +95,19 @@ namespace PantMigTesting.Endpoints
                         opt.UseInMemoryDatabase(databaseName));
                     services.AddScoped<IRecycleListingService, RecycleListingService>();
                     services.AddScoped<ICityResolver, CityResolver>();
+                    services.AddScoped<IRecycleListingValidationService, RecycleListingValidationService>();
+                    services.AddScoped<IFileValidationService, FileValidationService>();
+                    services.AddScoped<IChatValidationService, ChatValidationService>();
+                    services.AddScoped<ICreateListingRequestParser, CreateListingRequestParser>();
 
                     // Register a no-op antivirus scanner for tests
                     services.AddSingleton<IAntivirusScanner, NoOpAntivirusScanner>();
+
+                    // Ignore reference cycles introduced by navigation properties (Listing <-> Items)
+                    services.ConfigureHttpJsonOptions(o =>
+                    {
+                        o.SerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+                    });
                 })
                 .Configure(app =>
                 {
@@ -132,37 +143,34 @@ namespace PantMigTesting.Endpoints
 
     public class RecycleListingEndpointsTests
     {
+        // Enum numeric values: PlasticBottle=1, GlassBottle=2, Can=3
         [Fact]
         public async Task Create_Requires_VerifiedDonator()
         {
             using var server = TestHostBuilder.CreateServer();
             using var client = server.CreateClient();
 
-            // Recycler should be forbidden on donator-only endpoint
             client.SetTestUser("recycler-1", userType: "Recycler", isMitIdVerified: true);
             var badResp = await client.PostAsJsonAsync("/listings", new
             {
                 Title = "Cans",
                 Description = "Bag of cans",
                 City = "CPH",
-                EstimatedValue = (decimal?)null,
-                EstimatedAmount = "100",
                 AvailableFrom = DateTime.UtcNow,
-                AvailableTo = DateTime.UtcNow.AddHours(2)
+                AvailableTo = DateTime.UtcNow.AddHours(2),
+                Items = new[] { new { Type = 3, Quantity = 100 } }
             });
             Assert.Equal(HttpStatusCode.Forbidden, badResp.StatusCode);
 
-            // Verified donator should succeed
             client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
             var resp = await client.PostAsJsonAsync("/listings", new
             {
                 Title = "Cans",
                 Description = "Bag of cans",
                 City = "CPH",
-                EstimatedValue = (decimal?)null,
-                EstimatedAmount = "100",
                 AvailableFrom = DateTime.UtcNow,
-                AvailableTo = DateTime.UtcNow.AddHours(2)
+                AvailableTo = DateTime.UtcNow.AddHours(2),
+                Items = new[] { new { Type = 3, Quantity = 100 } }
             });
 
             Assert.Equal(HttpStatusCode.Created, resp.StatusCode);
@@ -170,6 +178,7 @@ namespace PantMigTesting.Endpoints
             Assert.NotNull(created);
             Assert.True(created!.Id > 0);
             Assert.Equal("donator-1", created.CreatedByUserId);
+            Assert.Single(created.Items);
         }
 
         [Fact]
@@ -178,17 +187,15 @@ namespace PantMigTesting.Endpoints
             using var server = TestHostBuilder.CreateServer();
             using var client = server.CreateClient();
 
-            // 1. Donator creates listing
             client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
             var createResp = await client.PostAsJsonAsync("/listings", new
             {
                 Title = "Cans",
                 Description = "Bag of cans",
                 City = "CPH",
-                EstimatedValue = (decimal?)null,
-                EstimatedAmount = "50",
                 AvailableFrom = DateTime.UtcNow,
-                AvailableTo = DateTime.UtcNow.AddHours(2)
+                AvailableTo = DateTime.UtcNow.AddHours(2),
+                Items = new[] { new { Type = 3, Quantity = 50 } }
             });
             createResp.EnsureSuccessStatusCode();
             var listing = await createResp.Content.ReadFromJsonAsync<RecycleListing>();
@@ -244,10 +251,9 @@ namespace PantMigTesting.Endpoints
                 Title = "Bottles",
                 Description = "Box of bottles",
                 City = "CPH",
-                EstimatedValue = (decimal?)null,
-                EstimatedAmount = "25",
                 AvailableFrom = DateTime.UtcNow,
-                AvailableTo = DateTime.UtcNow.AddHours(2)
+                AvailableTo = DateTime.UtcNow.AddHours(2),
+                Items = new[] { new { Type = 1, Quantity = 25 } }
             });
             createResp.EnsureSuccessStatusCode();
             var listing = await createResp.Content.ReadFromJsonAsync<RecycleListing>();
@@ -285,10 +291,9 @@ namespace PantMigTesting.Endpoints
                 Title = "Cans to cancel",
                 Description = "Bag of cans",
                 City = "CPH",
-                EstimatedValue = 10m,
-                EstimatedAmount = (string?)null,
                 AvailableFrom = DateTime.UtcNow,
-                AvailableTo = DateTime.UtcNow.AddHours(2)
+                AvailableTo = DateTime.UtcNow.AddHours(2),
+                Items = new[] { new { Type = 3, Quantity = 10 } }
             });
             createResp.EnsureSuccessStatusCode();
             var listing = await createResp.Content.ReadFromJsonAsync<RecycleListing>();

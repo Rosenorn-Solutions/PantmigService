@@ -13,6 +13,7 @@ using PantmigService.Hubs;
 using PantmigService.Seed;
 using System.Linq;
 using PantmigService.Security;
+using PantmigService.Endpoints.Helpers;
 
 namespace PantmigService
 {
@@ -38,21 +39,16 @@ namespace PantmigService
 
             builder.Host.UseSerilog();
 
-            // Add services to the container.
-            builder.Services.AddAuthorization(options =>
-            {
-                options.AddPolicy("VerifiedDonator", policy =>
+            builder.Services.AddAuthorizationBuilder()
+                .AddPolicy("VerifiedDonator", policy =>
                 {
                     policy.RequireAuthenticatedUser();
                     policy.RequireAssertion(ctx =>
                     {
                         var type = ctx.User.FindFirst("userType")?.Value;
-                        //var verified = ctx.User.FindFirst("isMitIdVerified")?.Value;
                         return string.Equals(type, "Donator", StringComparison.OrdinalIgnoreCase);
-                               //&& string.Equals(verified, bool.TrueString, StringComparison.OrdinalIgnoreCase);
                     });
                 });
-            });
 
             // CORS to allow front-end origins from configuration
             var allowedOrigins = builder.Configuration
@@ -65,14 +61,14 @@ namespace PantmigService
 
             if (allowedOrigins.Length == 0)
             {
-                // Sensible defaults for local dev
-                allowedOrigins = new[]
-                {
+                //defaults for local dev if no allowedOrigins found.
+                allowedOrigins =
+                [
                     "http://localhost:8081",
                     "https://localhost:8081",
                     "http://127.0.0.1:8081",
                     "https://127.0.0.1:8081"
-                };
+                ];
             }
 
             builder.Services.AddCors(options =>
@@ -86,7 +82,7 @@ namespace PantmigService
                 });
             });
 
-            // Authentication (JWT) reading same JwtSettings section as AuthService
+            // JWT Authentication
             var jwtSettings = builder.Configuration.GetSection("JwtSettings");
             var secretKey = jwtSettings["SecretKey"];
             var issuer = jwtSettings["Issuer"];
@@ -126,7 +122,7 @@ namespace PantmigService
                 };
             });
 
-            // Swagger & API Explorer
+            // Swagger & API Explorer (OpenAPI specification)
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen(c =>
             {
@@ -167,6 +163,10 @@ namespace PantmigService
             // App services
             builder.Services.AddScoped<IRecycleListingService, RecycleListingService>();
             builder.Services.AddScoped<ICityResolver, CityResolver>();
+            builder.Services.AddScoped<IRecycleListingValidationService, RecycleListingValidationService>();
+            builder.Services.AddScoped<IFileValidationService, FileValidationService>();
+            builder.Services.AddScoped<IChatValidationService, ChatValidationService>();
+            builder.Services.AddScoped<ICreateListingRequestParser, CreateListingRequestParser>();
 
             // Antivirus scanner (ClamAV)
             var clamSection = builder.Configuration.GetSection("ClamAV");

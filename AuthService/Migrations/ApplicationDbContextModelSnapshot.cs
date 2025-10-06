@@ -30,6 +30,9 @@ namespace AuthService.Migrations
                     b.Property<int>("AccessFailedCount")
                         .HasColumnType("int");
 
+                    b.Property<DateOnly?>("BirthDate")
+                        .HasColumnType("date");
+
                     b.Property<int?>("CityId")
                         .HasColumnType("int");
 
@@ -50,6 +53,9 @@ namespace AuthService.Migrations
                     b.Property<string>("FirstName")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("Gender")
+                        .HasColumnType("int");
 
                     b.Property<bool>("IsMitIdVerified")
                         .HasColumnType("bit");

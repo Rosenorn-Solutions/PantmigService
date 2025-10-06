@@ -5,15 +5,10 @@ using Microsoft.Extensions.Logging;
 
 namespace PantmigService.Services
 {
-    public class RecycleListingService : IRecycleListingService
+    public class RecycleListingService(PantmigDbContext db, ILogger<RecycleListingService> logger) : IRecycleListingService
     {
-        private readonly PantmigDbContext _db;
-        private readonly ILogger<RecycleListingService> _logger;
-        public RecycleListingService(PantmigDbContext db, ILogger<RecycleListingService> logger)
-        {
-            _db = db;
-            _logger = logger;
-        }
+        private readonly PantmigDbContext _db = db;
+        private readonly ILogger<RecycleListingService> _logger = logger;
 
         public async Task<RecycleListing> CreateAsync(RecycleListing listing, CancellationToken ct = default)
         {
@@ -27,7 +22,7 @@ namespace PantmigService.Services
         public Task<RecycleListing?> GetByIdAsync(int id, CancellationToken ct = default)
         {
             _logger.LogDebug("Retrieving listing {ListingId}", id);
-            return _db.RecycleListings.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id, ct);
+            return _db.RecycleListings.AsNoTracking().Include(l => l.Items).Include(l => l.Images).FirstOrDefaultAsync(x => x.Id == id, ct);
         }
 
         public async Task<IEnumerable<RecycleListing>> GetActiveAsync(CancellationToken ct = default)
@@ -36,6 +31,8 @@ namespace PantmigService.Services
             var list = await _db.RecycleListings.AsNoTracking()
                 .Where(x => x.IsActive && (x.Status == ListingStatus.Created || x.Status == ListingStatus.PendingAcceptance))
                 .OrderByDescending(x => x.CreatedAt)
+                .Include(l => l.Items)
+                .Include(l => l.Images)
                 .ToListAsync(ct);
             _logger.LogDebug("Fetched {Count} active listings", list.Count);
             return list;
@@ -47,6 +44,8 @@ namespace PantmigService.Services
             var list = await _db.RecycleListings.AsNoTracking()
                 .Where(x => x.CreatedByUserId == userId)
                 .OrderByDescending(x => x.CreatedAt)
+                .Include(l => l.Items)
+                .Include(l => l.Images)
                 .ToListAsync(ct);
             _logger.LogDebug("User {UserId} has {Count} listings", userId, list.Count);
             return list;
@@ -59,6 +58,8 @@ namespace PantmigService.Services
                 .AsNoTracking()
                 .Where(l => l.Applicants.Any(a => a.RecyclerUserId == recyclerUserId))
                 .OrderByDescending(x => x.CreatedAt)
+                .Include(l => l.Items)
+                .Include(l => l.Images)
                 .ToListAsync(ct);
             _logger.LogDebug("Recycler {Recycler} has applied to {Count} listings", recyclerUserId, list.Count);
             return list;
@@ -225,7 +226,6 @@ namespace PantmigService.Services
             return true;
         }
 
-        // Now pickup is confirmed by the donator (owner) after chat and meeting are set
         public async Task<bool> ConfirmPickupAsync(int id, string donatorUserId, CancellationToken ct = default)
         {
             _logger.LogDebug("Confirming pickup for listing {ListingId} by donator {Donator}", id, donatorUserId);
@@ -251,7 +251,6 @@ namespace PantmigService.Services
                 return false;
             }
 
-            // Mark listing as completed at pickup confirmation (workflow ends here).
             listing.Status = ListingStatus.Completed;
             listing.PickupConfirmedAt = DateTime.UtcNow;
             listing.CompletedAt = DateTime.UtcNow;
@@ -276,7 +275,6 @@ namespace PantmigService.Services
                 return false;
             }
 
-            // Store the receipt without changing status
             listing.ReceiptImageUrl = null;
             listing.ReceiptImageBytes = data;
             listing.ReceiptImageContentType = contentType;

@@ -1,22 +1,23 @@
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using PantmigService.Data;
+using PantmigService.Endpoints;
+using PantmigService.Endpoints.Helpers;
+using PantmigService.Entities;
+using PantmigService.Security;
+using PantmigService.Services;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using System.Text;
-using PantmigService.Endpoints;
-using PantmigService.Entities;
-using Microsoft.AspNetCore.TestHost;
-using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.AspNetCore.Authentication;
-using Microsoft.Extensions.Options;
-using Microsoft.Extensions.Logging;
-using System.Text.Encodings.Web;
 using System.Security.Claims;
-using Microsoft.EntityFrameworkCore;
-using PantmigService.Data;
-using PantmigService.Services;
-using PantmigService.Security;
-using Microsoft.Extensions.Configuration;
+using System.Text;
+using System.Text.Encodings.Web;
 
 namespace PantMigTesting.Endpoints;
 
@@ -35,10 +36,9 @@ public class ReceiptUploadEndpointsTests
             Title = "Cans",
             Description = "Bag of cans",
             City = "CPH",
-            EstimatedValue = (decimal?)null,
-            EstimatedAmount = "50",
             AvailableFrom = DateTime.UtcNow,
-            AvailableTo = DateTime.UtcNow.AddHours(2)
+            AvailableTo = DateTime.UtcNow.AddHours(2),
+            Items = new[] { new { Type = 3, Quantity = 50 } } // Can
         });
         createResp.EnsureSuccessStatusCode();
         var listing = await createResp.Content.ReadFromJsonAsync<RecycleListing>();
@@ -130,10 +130,9 @@ public class ReceiptUploadEndpointsTests
             Title = "E2E infected test",
             Description = "Should be blocked",
             City = "CPH",
-            EstimatedValue = (decimal?)null,
-            EstimatedAmount = "1",
             AvailableFrom = DateTime.UtcNow,
-            AvailableTo = DateTime.UtcNow.AddHours(1)
+            AvailableTo = DateTime.UtcNow.AddHours(1),
+            Items = new[] { new { Type = 3, Quantity = 1 } } // Can
         });
         createResp.EnsureSuccessStatusCode();
         var listing = await createResp.Content.ReadFromJsonAsync<RecycleListing>();
@@ -201,6 +200,10 @@ public class ReceiptUploadEndpointsTests
                     opt.UseInMemoryDatabase(dbName));
                 services.AddScoped<IRecycleListingService, RecycleListingService>();
                 services.AddScoped<ICityResolver, CityResolver>();
+                services.AddScoped<IRecycleListingValidationService, RecycleListingValidationService>();
+                services.AddScoped<IFileValidationService, FileValidationService>();
+                services.AddScoped<IChatValidationService, ChatValidationService>();
+                services.AddScoped<ICreateListingRequestParser, CreateListingRequestParser>();
 
                 // Use real ClamAV for this server
                 services.AddSingleton<IAntivirusScanner>(_ => new ClamAvAntivirusScanner(new ClamAvOptions
