@@ -142,9 +142,6 @@ namespace PantmigService.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<string>("EstimatedAmount")
-                        .HasColumnType("nvarchar(max)");
-
                     b.Property<decimal?>("EstimatedValue")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
@@ -236,6 +233,73 @@ namespace PantmigService.Migrations
                     b.ToTable("RecycleListingApplicants");
                 });
 
+            modelBuilder.Entity("PantmigService.Entities.RecycleListingImage", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<byte[]>("Data")
+                        .IsRequired()
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int>("ListingId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ListingId", "Order");
+
+                    b.ToTable("RecycleListingImages");
+                });
+
+            modelBuilder.Entity("PantmigService.Entities.RecycleListingItem", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("DepositClass")
+                        .HasColumnType("nvarchar(450)");
+
+                    b.Property<decimal?>("EstimatedDepositPerUnit")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<int>("ListingId")
+                        .HasColumnType("int");
+
+                    b.Property<int>("MaterialType")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ListingId", "MaterialType", "DepositClass");
+
+                    b.ToTable("RecycleListingItems");
+                });
+
             modelBuilder.Entity("PantmigService.Entities.CityPostalCode", b =>
                 {
                     b.HasOne("PantmigService.Entities.City", "City")
@@ -269,9 +333,35 @@ namespace PantmigService.Migrations
                     b.Navigation("Listing");
                 });
 
+            modelBuilder.Entity("PantmigService.Entities.RecycleListingImage", b =>
+                {
+                    b.HasOne("PantmigService.Entities.RecycleListing", "Listing")
+                        .WithMany("Images")
+                        .HasForeignKey("ListingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Listing");
+                });
+
+            modelBuilder.Entity("PantmigService.Entities.RecycleListingItem", b =>
+                {
+                    b.HasOne("PantmigService.Entities.RecycleListing", "Listing")
+                        .WithMany("Items")
+                        .HasForeignKey("ListingId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Listing");
+                });
+
             modelBuilder.Entity("PantmigService.Entities.RecycleListing", b =>
                 {
                     b.Navigation("Applicants");
+
+                    b.Navigation("Images");
+
+                    b.Navigation("Items");
                 });
 #pragma warning restore 612, 618
         }

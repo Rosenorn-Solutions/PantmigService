@@ -3,6 +3,7 @@ using PantmigService.Entities;
 namespace PantmigService.Endpoints;
 
 public record RecycleListingItemResponse(int Id, RecycleMaterialType MaterialType, int Quantity, string? DepositClass, decimal? EstimatedDepositPerUnit);
+public record RecycleListingImageResponse(int Id, string FileName, string ContentType, int Order);
 
 public record RecycleListingResponse
 {
@@ -24,6 +25,7 @@ public record RecycleListingResponse
     public byte[]? ReceiptImageBytes { get; init; }
     public string? ReceiptImageUrl { get; init; }
     public List<RecycleListingItemResponse> Items { get; init; } = [];
+    public List<RecycleListingImageResponse> Images { get; init; } = [];
 }
 
 public static class RecycleListingMapper
@@ -48,7 +50,8 @@ public static class RecycleListingMapper
             VerifiedAmount = l.VerifiedAmount,
             ReceiptImageBytes = l.ReceiptImageBytes,
             ReceiptImageUrl = l.ReceiptImageUrl,
-            Items = l.Items.Select(i => new RecycleListingItemResponse(i.Id, i.MaterialType, i.Quantity, i.DepositClass, i.EstimatedDepositPerUnit)).ToList()
+            Items = [.. l.Items.Select(i => new RecycleListingItemResponse(i.Id, i.MaterialType, i.Quantity, i.DepositClass, i.EstimatedDepositPerUnit))],
+            Images = [.. l.Images.Select(img => new RecycleListingImageResponse(img.Id, img.FileName, img.ContentType, img.Order))]
         };
 
     public static IEnumerable<RecycleListingResponse> ToResponse(this IEnumerable<RecycleListing> listings) => listings.Select(ToResponse);

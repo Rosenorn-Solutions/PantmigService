@@ -22,7 +22,7 @@ namespace PantmigService.Services
         public Task<RecycleListing?> GetByIdAsync(int id, CancellationToken ct = default)
         {
             _logger.LogDebug("Retrieving listing {ListingId}", id);
-            return _db.RecycleListings.AsNoTracking().Include(l => l.Items).FirstOrDefaultAsync(x => x.Id == id, ct);
+            return _db.RecycleListings.AsNoTracking().Include(l => l.Items).Include(l => l.Images).FirstOrDefaultAsync(x => x.Id == id, ct);
         }
 
         public async Task<IEnumerable<RecycleListing>> GetActiveAsync(CancellationToken ct = default)
@@ -32,6 +32,7 @@ namespace PantmigService.Services
                 .Where(x => x.IsActive && (x.Status == ListingStatus.Created || x.Status == ListingStatus.PendingAcceptance))
                 .OrderByDescending(x => x.CreatedAt)
                 .Include(l => l.Items)
+                .Include(l => l.Images)
                 .ToListAsync(ct);
             _logger.LogDebug("Fetched {Count} active listings", list.Count);
             return list;
@@ -44,6 +45,7 @@ namespace PantmigService.Services
                 .Where(x => x.CreatedByUserId == userId)
                 .OrderByDescending(x => x.CreatedAt)
                 .Include(l => l.Items)
+                .Include(l => l.Images)
                 .ToListAsync(ct);
             _logger.LogDebug("User {UserId} has {Count} listings", userId, list.Count);
             return list;
@@ -57,6 +59,7 @@ namespace PantmigService.Services
                 .Where(l => l.Applicants.Any(a => a.RecyclerUserId == recyclerUserId))
                 .OrderByDescending(x => x.CreatedAt)
                 .Include(l => l.Items)
+                .Include(l => l.Images)
                 .ToListAsync(ct);
             _logger.LogDebug("Recycler {Recycler} has applied to {Count} listings", recyclerUserId, list.Count);
             return list;

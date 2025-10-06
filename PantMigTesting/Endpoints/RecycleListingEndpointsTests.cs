@@ -1,7 +1,3 @@
-using System.Net;
-using System.Net.Http.Json;
-using System.Security.Claims;
-using System.Text.Encodings.Web;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -12,9 +8,14 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using PantmigService.Data;
 using PantmigService.Endpoints;
+using PantmigService.Endpoints.Helpers;
 using PantmigService.Entities;
-using PantmigService.Services;
 using PantmigService.Security;
+using PantmigService.Services;
+using System.Net;
+using System.Net.Http.Json;
+using System.Security.Claims;
+using System.Text.Encodings.Web;
 
 namespace PantMigTesting.Endpoints
 {
@@ -94,6 +95,10 @@ namespace PantMigTesting.Endpoints
                         opt.UseInMemoryDatabase(databaseName));
                     services.AddScoped<IRecycleListingService, RecycleListingService>();
                     services.AddScoped<ICityResolver, CityResolver>();
+                    services.AddScoped<IRecycleListingValidationService, RecycleListingValidationService>();
+                    services.AddScoped<IFileValidationService, FileValidationService>();
+                    services.AddScoped<IChatValidationService, ChatValidationService>();
+                    services.AddScoped<ICreateListingRequestParser, CreateListingRequestParser>();
 
                     // Register a no-op antivirus scanner for tests
                     services.AddSingleton<IAntivirusScanner, NoOpAntivirusScanner>();

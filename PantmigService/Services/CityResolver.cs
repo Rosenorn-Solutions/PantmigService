@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using PantmigService.Data;
 using PantmigService.Entities;
-using PantmigService.Utils;
+using PantmigService.Utils.Helpers;
 
 namespace PantmigService.Services
 {

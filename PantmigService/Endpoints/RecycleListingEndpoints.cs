@@ -9,6 +9,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Antiforgery;
 using PantmigService.Security;
 using PantmigService.Endpoints;
+using PantmigService.Utils.Extensions;
+using PantmigService.Endpoints.Helpers;
 
 namespace PantmigService.Endpoints
 {
@@ -97,7 +99,7 @@ namespace PantmigService.Endpoints
                         logger.LogWarning("Unauthorized access to my-listings");
                         return Results.Unauthorized();
                     }
-                    // Returns all listings for this user regardless of status
+                    // Returns all listings for this user regardless of status; front-end filters as needed.
                     var items = await svc.GetByUserAsync(userId, ctx.RequestAborted);
                     return Results.Ok(items.ToResponse());
                 }
@@ -148,89 +150,58 @@ namespace PantmigService.Endpoints
             .Produces<RecycleListingResponse>(StatusCodes.Status200OK, contentType: "application/json")
             .Produces(StatusCodes.Status404NotFound);
 
-            // Donator creates listing
-            group.MapPost("/", async (CreateRecycleListingRequest req, ClaimsPrincipal user, IRecycleListingService svc, ICityResolver cityResolver, ILoggerFactory lf, HttpContext ctx) =>
+            // Donator creates listing (JSON or multipart with images[])
+            group.MapPost("/", async (HttpRequest httpRequest, ClaimsPrincipal user, IRecycleListingService svc, IRecycleListingValidationService validator, ICreateListingRequestParser parser, ICityResolver cityResolver, ILoggerFactory lf, HttpContext ctx) =>
             {
                 var logger = lf.CreateLogger("Listings");
                 try
                 {
-                    var userId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+                    var userId = user.GetUserId();
                     if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
 
-                    if (string.IsNullOrWhiteSpace(req.Title) || string.IsNullOrWhiteSpace(req.Description))
+                    var parseResult = await parser.ParseAsync(httpRequest, ctx.RequestAborted);
+                    if (!parseResult.IsSuccess)
                     {
-                        return Results.Problem(title: "Validation error", detail: "Title and Description are required", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
+                        var p = parseResult.Problem!;
+                        return Results.Problem(title: p.Title, detail: p.Detail, statusCode: p.StatusCode, instance: ctx.TraceIdentifier);
                     }
 
-                    var cityInput = req.City ?? req.Location;
-                    if (string.IsNullOrWhiteSpace(cityInput))
+                    var rawItems = parseResult.RawItems;
+                    var itemInputs = rawItems?.Select(i => new CreateListingItemInput(i.Type, i.Quantity, i.DepositClass, i.EstimatedDepositPerUnit)).ToList();
+                    var validation = validator.ValidateCreate(parseResult.Title, parseResult.Description, parseResult.City, parseResult.Location, parseResult.AvailableFrom, parseResult.AvailableTo, itemInputs);
+                    if (!validation.IsValid)
                     {
-                        return Results.Problem(title: "Validation error", detail: "City or Location is required", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
+                        var vp = validation.Problem!;
+                        return Results.Problem(title: vp.Title, detail: vp.Detail, statusCode: vp.StatusCode, instance: ctx.TraceIdentifier);
                     }
 
-                    if (req.AvailableTo <= req.AvailableFrom)
-                    {
-                        return Results.Problem(title: "Validation error", detail: "AvailableTo must be after AvailableFrom", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
-                    }
-
-                    if (req.Items is null || req.Items.Count == 0)
-                    {
-                        return Results.Problem(title: "Validation error", detail: "At least one item is required", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
-                    }
-
-                    // Validation: each quantity > 0
-                    foreach (var it in req.Items)
-                    {
-                        if (it.Quantity <= 0)
-                        {
-                            return Results.Problem(title: "Validation error", detail: "All item quantities must be greater than zero", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
-                        }
-                        if (it.Quantity > 10_000)
-                        {
-                            return Results.Problem(title: "Validation error", detail: "Item quantity too large", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
-                        }
-                    }
-
-                    var cityId = await cityResolver.ResolveOrCreateAsync(cityInput, ctx.RequestAborted);
-
-                    // Compute estimated value if per-unit deposits provided
-                    decimal? estimatedValue = null;
-                    if (req.Items.Any(i => i.EstimatedDepositPerUnit.HasValue))
-                    {
-                        decimal sum = 0;
-                        foreach (var i in req.Items)
-                        {
-                            if (i.EstimatedDepositPerUnit.HasValue)
-                            {
-                                sum += i.EstimatedDepositPerUnit.Value * i.Quantity;
-                            }
-                        }
-                        estimatedValue = sum;
-                    }
+                    var v = validation.Value!;
+                    var cityId = await cityResolver.ResolveOrCreateAsync(v.CityInput, ctx.RequestAborted);
 
                     var listing = new RecycleListing
                     {
-                        Title = req.Title,
-                        Description = req.Description,
-                        EstimatedValue = estimatedValue,
-                        AvailableFrom = req.AvailableFrom,
-                        AvailableTo = req.AvailableTo,
+                        Title = v.Title,
+                        Description = v.Description,
+                        EstimatedValue = v.EstimatedValue,
+                        AvailableFrom = v.AvailableFrom,
+                        AvailableTo = v.AvailableTo,
                         CreatedByUserId = userId,
                         CreatedAt = DateTime.UtcNow,
                         IsActive = true,
                         Status = ListingStatus.Created,
                         CityId = cityId,
-                        Items = [.. req.Items.Select(i => new RecycleListingItem
+                        Items = [.. v.Items.Select(i => new RecycleListingItem
                         {
                             MaterialType = i.Type,
                             Quantity = i.Quantity,
                             DepositClass = i.DepositClass,
                             EstimatedDepositPerUnit = i.EstimatedDepositPerUnit
-                        })]
+                        })],
+                        Images = parseResult.Images
                     };
 
                     var created = await svc.CreateAsync(listing, ctx.RequestAborted);
-                    logger.LogInformation("Listing {ListingId} created by {UserId}", created.Id, userId);
+                    logger.LogInformation("Listing {ListingId} created by {UserId} with {ImageCount} images", created.Id, userId, parseResult.Images.Count);
                     return Results.Created($"/listings/{created.Id}", created.ToResponse());
                 }
                 catch (Exception ex)
@@ -240,12 +211,11 @@ namespace PantmigService.Endpoints
                 }
             })
             .RequireAuthorization("VerifiedDonator")
-            .Accepts<CreateRecycleListingRequest>("application/json")
             .WithOpenApi(op =>
             {
                 op.OperationId = "Listings_Create";
                 op.Summary = "Create a new listing";
-                op.Description = "Creates a new recycle listing with structured item contents. Requires a verified Donator.";
+                op.Description = "Creates a new recycle listing with structured item contents. Supports either JSON body (application/json) or multipart/form-data (fields: Title, Description, City/Location, AvailableFrom, AvailableTo, Items as JSON string, images[] as image/*). Requires a verified Donator.";
                 return op;
             })
             .Produces<RecycleListingResponse>(StatusCodes.Status201Created, contentType: "application/json")
@@ -361,43 +331,34 @@ namespace PantmigService.Endpoints
             .Produces(StatusCodes.Status401Unauthorized);
 
             // Start direct chat between donator and assigned recycler (restricted to those two users)
-            group.MapPost("/chat/start", async (ChatStartRequest req, ClaimsPrincipal user, IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx) =>
+            group.MapPost("/chat/start", async (ChatStartRequest req, ClaimsPrincipal user, IRecycleListingService svc, IChatValidationService chatValidator, ILoggerFactory lf, HttpContext ctx) =>
             {
                 var logger = lf.CreateLogger("Listings");
                 try
                 {
-                    var userId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+                    var userId = user.GetUserId();
                     if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
 
                     var listing = await svc.GetByIdAsync(req.ListingId, ctx.RequestAborted);
                     if (listing is null)
                     {
-                        logger.LogWarning("Listing {ListingId} not found for chat start", req.ListingId);
                         return Results.NotFound(new { error = "Listing not found" });
                     }
-                    if (!listing.IsActive || listing.Status != ListingStatus.Accepted)
+
+                    var chatValidation = chatValidator.ValidateStartChat(listing, userId);
+                    if (!chatValidation.IsValid)
                     {
-                        logger.LogWarning("Chat start invalid state for listing {ListingId}", req.ListingId);
-                        return Results.Problem(title: "Chat unavailable", detail: "Listing is not in an accepted state.", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
+                        var p = chatValidation.Problem!;
+                        if (p.StatusCode == StatusCodes.Status404NotFound)
+                            return Results.NotFound(new { error = p.Detail });
+                        if (p.StatusCode == StatusCodes.Status403Forbidden)
+                            return Results.Forbid();
+                        return p.ToProblemResult(ctx);
                     }
 
-                    var donatorId = listing.CreatedByUserId;
-                    var recyclerId = listing.AssignedRecyclerUserId;
-                    if (string.IsNullOrEmpty(recyclerId))
-                    {
-                        logger.LogWarning("No recycler assigned for listing {ListingId}", req.ListingId);
-                        return Results.Problem(title: "Chat unavailable", detail: "No recycler assigned.", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
-                    }
-
-                    var isParticipant = string.Equals(userId, donatorId, StringComparison.Ordinal) || string.Equals(userId, recyclerId, StringComparison.Ordinal);
-                    if (!isParticipant) return Results.Forbid();
-
-                    var chatId = $"listing-{req.ListingId}";
-
-                    var ok = await svc.StartChatAsync(req.ListingId, chatId, ctx.RequestAborted);
+                    var ok = await svc.StartChatAsync(req.ListingId, chatValidation.Value!, ctx.RequestAborted);
                     if (!ok)
                     {
-                        logger.LogWarning("Failed to start chat for listing {ListingId}", req.ListingId);
                         return Results.Problem(title: "Chat start failed", detail: "Unable to start chat for this listing.", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
                     }
                     logger.LogInformation("Chat started for listing {ListingId}", req.ListingId);
@@ -497,21 +458,18 @@ namespace PantmigService.Endpoints
             .Produces(StatusCodes.Status401Unauthorized);
 
             // Recycler uploads receipt image (binary upload)
-            group.MapPost("/receipt/upload", async ([FromForm] int listingId, [FromForm] decimal reportedAmount, [FromForm] IFormFile file, ClaimsPrincipal user, IRecycleListingService svc, IAntivirusScanner av, ILoggerFactory lf, HttpContext ctx) =>
+            group.MapPost("/receipt/upload", async ([FromForm] int listingId, [FromForm] decimal reportedAmount, [FromForm] IFormFile file, ClaimsPrincipal user, IRecycleListingService svc, IFileValidationService fileValidator, IAntivirusScanner av, ILoggerFactory lf, HttpContext ctx) =>
             {
                 var logger = lf.CreateLogger("Listings");
                 try
                 {
-                    var userId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+                    var userId = user.GetUserId();
                     if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
 
-                    if (file is null || file.Length == 0)
+                    var fileValidation = fileValidator.ValidateImage(file, "file");
+                    if (!fileValidation.IsValid)
                     {
-                        return Results.Problem(title: "Validation error", detail: "Receipt file is required", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
-                    }
-                    if (!string.IsNullOrEmpty(file.ContentType) && !file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
-                    {
-                        return Results.Problem(title: "Validation error", detail: "Only image files are allowed", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
+                        return fileValidation.Problem!.ToProblemResult(ctx);
                     }
 
                     await using var ms = new MemoryStream();

@@ -58,6 +58,9 @@ namespace PantmigService.Entities
         // Structured content items (plastic bottles, glass bottles, cans, etc.)
         public ICollection<RecycleListingItem> Items { get; set; } = [];
 
+        // Listing images (uploaded at creation time). Stored inline for now.
+        public ICollection<RecycleListingImage> Images { get; set; } = [];
+
         // Approximate worth based on average deposit per item (2.33)
         [NotMapped]
         public decimal ApproximateWorth

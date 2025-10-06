@@ -2,7 +2,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace PantmigService.Utils
+namespace PantmigService.Utils.Helpers
 {
     public static class SlugHelper
     {

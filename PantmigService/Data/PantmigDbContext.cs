@@ -15,6 +15,7 @@ namespace PantmigService.Data
         public DbSet<CityPostalCode> CityPostalCodes => Set<CityPostalCode>();
         public DbSet<RecycleListingApplicant> RecycleListingApplicants => Set<RecycleListingApplicant>();
         public DbSet<RecycleListingItem> RecycleListingItems => Set<RecycleListingItem>();
+        public DbSet<RecycleListingImage> RecycleListingImages => Set<RecycleListingImage>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -89,6 +90,15 @@ namespace PantmigService.Data
             modelBuilder.Entity<RecycleListingItem>()
                 .HasOne(i => i.Listing)
                 .WithMany(l => l.Items)
+                .HasForeignKey(i => i.ListingId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<RecycleListingImage>()
+                .HasIndex(i => new { i.ListingId, i.Order });
+
+            modelBuilder.Entity<RecycleListingImage>()
+                .HasOne(i => i.Listing)
+                .WithMany(l => l.Images)
                 .HasForeignKey(i => i.ListingId)
                 .OnDelete(DeleteBehavior.Cascade);
         }
