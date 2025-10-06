@@ -29,7 +29,7 @@ public class ListingImageCreationTests
 
         client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
 
-        // Build a simple in?memory image (fake jpeg header + data)
+        // Build a simple in-memory image (fake jpeg header + data)
         var imgBytes = BuildFakeJpeg();
         var imgBytes2 = BuildFakeJpeg();
 
