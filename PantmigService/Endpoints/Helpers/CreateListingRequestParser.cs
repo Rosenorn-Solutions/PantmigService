@@ -8,6 +8,9 @@ namespace PantmigService.Endpoints.Helpers;
 
 public class CreateListingRequestParser : ICreateListingRequestParser
 {
+    private const int MaxImages = 6;
+    private const long MaxImageBytes = 5 * 1024 * 1024; // 5 MB
+
     private readonly IRecycleListingValidationService _validator;
     private readonly IAntivirusScanner _antivirus;
     private readonly ILogger<CreateListingRequestParser> _logger;
@@ -24,15 +27,15 @@ public class CreateListingRequestParser : ICreateListingRequestParser
         if (request.HasFormContentType)
         {
             var form = await request.ReadFormAsync(ct);
-            string? title = form["Title"].FirstOrDefault();
-            string? description = form["Description"].FirstOrDefault();
-            string? city = form["City"].FirstOrDefault();
-            string? location = form["Location"].FirstOrDefault();
-            DateTime.TryParse(form["AvailableFrom"].FirstOrDefault(), out var availableFrom);
-            DateTime.TryParse(form["AvailableTo"].FirstOrDefault(), out var availableTo);
+            string? title = form["Title"].FirstOrDefault() ?? form["title"].FirstOrDefault();
+            string? description = form["Description"].FirstOrDefault() ?? form["description"].FirstOrDefault();
+            string? city = form["City"].FirstOrDefault() ?? form["city"].FirstOrDefault();
+            string? location = form["Location"].FirstOrDefault() ?? form["location"].FirstOrDefault();
+            DateTime.TryParse(form["AvailableFrom"].FirstOrDefault() ?? form["availableFrom"].FirstOrDefault(), out var availableFrom);
+            DateTime.TryParse(form["AvailableTo"].FirstOrDefault() ?? form["availableTo"].FirstOrDefault(), out var availableTo);
 
             List<RecycleListingEndpoints.CreateRecycleListingItemRequest>? rawItems = null;
-            var itemsJson = form["Items"].FirstOrDefault();
+            var itemsJson = form["Items"].FirstOrDefault() ?? form["items"].FirstOrDefault();
             if (!string.IsNullOrWhiteSpace(itemsJson))
             {
                 try
@@ -47,9 +50,18 @@ public class CreateListingRequestParser : ICreateListingRequestParser
 
             var images = new List<RecycleListingImage>();
             int order = 0;
-            foreach (var file in form.Files.Where(f => f.Name == "images"))
+            var imageFiles = form.Files.Where(f => string.Equals(f.Name, "images", StringComparison.OrdinalIgnoreCase)).ToList();
+            if (imageFiles.Count > MaxImages)
+            {
+                return new ParseCreateListingResult { Problem = new ValidationProblem("Validation error", $"A maximum of {MaxImages} images are allowed", StatusCodes.Status400BadRequest) };
+            }
+            foreach (var file in imageFiles)
             {
                 if (file.Length == 0) continue;
+                if (file.Length > MaxImageBytes)
+                {
+                    return new ParseCreateListingResult { Problem = new ValidationProblem("Validation error", $"Image {file.FileName} exceeds max size of {MaxImageBytes / (1024 * 1024)} MB", StatusCodes.Status400BadRequest) };
+                }
                 if (!_validator.IsImage(file.ContentType))
                 {
                     return new ParseCreateListingResult { Problem = new ValidationProblem("Validation error", "All uploaded files must be images", StatusCodes.Status400BadRequest) };

@@ -182,7 +182,6 @@ namespace PantmigService.Endpoints
                     {
                         Title = v.Title,
                         Description = v.Description,
-                        EstimatedValue = v.EstimatedValue,
                         AvailableFrom = v.AvailableFrom,
                         AvailableTo = v.AvailableTo,
                         CreatedByUserId = userId,
@@ -211,11 +210,60 @@ namespace PantmigService.Endpoints
                 }
             })
             .RequireAuthorization("VerifiedDonator")
+            .Accepts<CreateRecycleListingRequest>("application/json", "multipart/form-data")
             .WithOpenApi(op =>
             {
                 op.OperationId = "Listings_Create";
                 op.Summary = "Create a new listing";
-                op.Description = "Creates a new recycle listing with structured item contents. Supports either JSON body (application/json) or multipart/form-data (fields: Title, Description, City/Location, AvailableFrom, AvailableTo, Items as JSON string, images[] as image/*). Requires a verified Donator.";
+                op.Description = "Creates a new recycle listing with structured item contents. Supports either JSON body (application/json) or multipart/form-data (fields: title, description, city/location, availableFrom, availableTo, items as JSON string, images as image/*). Requires a verified Donator.";
+
+                // Ensure requestBody with both content types
+                op.RequestBody = new OpenApiRequestBody
+                {
+                    Required = true,
+                    Content =
+                    {
+                        ["application/json"] = new OpenApiMediaType
+                        {
+                            Schema = new OpenApiSchema
+                            {
+                                Reference = new OpenApiReference
+                                {
+                                    Type = ReferenceType.Schema,
+                                    Id = nameof(CreateRecycleListingRequest)
+                                }
+                            }
+                        },
+                        ["multipart/form-data"] = new OpenApiMediaType
+                        {
+                            Schema = new OpenApiSchema
+                            {
+                                Type = "object",
+                                Required = { "title", "description", "city", "availableFrom", "availableTo" },
+                                Properties =
+                                {
+                                    ["title"] = new OpenApiSchema { Type = "string" },
+                                    ["description"] = new OpenApiSchema { Type = "string" },
+                                    ["city"] = new OpenApiSchema { Type = "string" },
+                                    ["location"] = new OpenApiSchema { Type = "string", Nullable = true },
+                                    ["availableFrom"] = new OpenApiSchema { Type = "string", Format = "date-time" },
+                                    ["availableTo"] = new OpenApiSchema { Type = "string", Format = "date-time" },
+                                    ["items"] = new OpenApiSchema
+                                    {
+                                        Description = "JSON array of items example: [{\"type\":1,\"quantity\":10}]",
+                                        Type = "string"
+                                    },
+                                    ["images"] = new OpenApiSchema
+                                    {
+                                        Type = "array",
+                                        Items = new OpenApiSchema { Type = "string", Format = "binary" },
+                                        Description = "Zero or more images (PNG/JPEG). Max 6 images, each <= 5 MB."
+                                    }
+                                }
+                            }
+                        }
+                    }
+                };
                 return op;
             })
             .Produces<RecycleListingResponse>(StatusCodes.Status201Created, contentType: "application/json")
