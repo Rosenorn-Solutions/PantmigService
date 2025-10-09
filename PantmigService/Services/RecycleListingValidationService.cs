@@ -12,8 +12,10 @@ public class RecycleListingValidationService : IRecycleListingValidationService
         string? description,
         string? city,
         string? location,
-        DateTime availableFrom,
-        DateTime availableTo,
+        DateOnly availableFrom,
+        DateOnly availableTo,
+        TimeOnly? pickupTimeFrom,
+        TimeOnly? pickupTimeTo,
         List<CreateListingItemInput>? items)
     {
         if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(description))
@@ -25,6 +27,12 @@ public class RecycleListingValidationService : IRecycleListingValidationService
 
         if (availableTo <= availableFrom)
             return ValidationResult<CreateListingValidated>.Failure("Validation error", "AvailableTo must be after AvailableFrom", StatusCodes.Status400BadRequest);
+
+        if ((pickupTimeFrom.HasValue && !pickupTimeTo.HasValue) || (!pickupTimeFrom.HasValue && pickupTimeTo.HasValue))
+            return ValidationResult<CreateListingValidated>.Failure("Validation error", "Both pickupTimeFrom and pickupTimeTo must be supplied together", StatusCodes.Status400BadRequest);
+
+        if (pickupTimeFrom.HasValue && pickupTimeTo.HasValue && pickupTimeTo <= pickupTimeFrom)
+            return ValidationResult<CreateListingValidated>.Failure("Validation error", "pickupTimeTo must be after pickupTimeFrom", StatusCodes.Status400BadRequest);
 
         if (items is null || items.Count == 0)
             return ValidationResult<CreateListingValidated>.Failure("Validation error", "At least one item is required", StatusCodes.Status400BadRequest);
@@ -55,6 +63,8 @@ public class RecycleListingValidationService : IRecycleListingValidationService
             cityInput.Trim(),
             availableFrom,
             availableTo,
+            pickupTimeFrom,
+            pickupTimeTo,
             items,
             estimatedValue));
     }

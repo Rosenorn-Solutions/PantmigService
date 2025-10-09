@@ -20,8 +20,12 @@ namespace PantmigService.Entities
         public string Description { get; set; } = string.Empty;
         public string Location { get; set; } = string.Empty;
         public decimal? EstimatedValue { get; set; }
-        public DateTime AvailableFrom { get; set; }
-        public DateTime AvailableTo { get; set; }
+        // Availability date range (date-only now)
+        public DateOnly AvailableFrom { get; set; }
+        public DateOnly AvailableTo { get; set; }
+        // Optional daily pickup window (time-only, both must be supplied if any)
+        public TimeOnly? PickupTimeFrom { get; set; }
+        public TimeOnly? PickupTimeTo { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public string CreatedByUserId { get; set; } = string.Empty; // Foreign key to ApplicationUser
         public bool IsActive { get; set; } = true;

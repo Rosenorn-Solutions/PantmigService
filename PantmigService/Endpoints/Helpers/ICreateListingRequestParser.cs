@@ -14,8 +14,10 @@ public class ParseCreateListingResult
     public string? Description { get; init; }
     public string? City { get; init; }
     public string? Location { get; init; }
-    public DateTime AvailableFrom { get; init; }
-    public DateTime AvailableTo { get; init; }
+    public DateOnly AvailableFrom { get; init; }
+    public DateOnly AvailableTo { get; init; }
+    public TimeOnly? PickupTimeFrom { get; init; }
+    public TimeOnly? PickupTimeTo { get; init; }
     public List<RecycleListingEndpoints.CreateRecycleListingItemRequest>? RawItems { get; init; }
     public List<RecycleListingImage> Images { get; init; } = new();
     public ValidationProblem? Problem { get; init; }

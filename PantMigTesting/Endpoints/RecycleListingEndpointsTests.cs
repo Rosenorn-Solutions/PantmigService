@@ -156,8 +156,8 @@ namespace PantMigTesting.Endpoints
                 Title = "Cans",
                 Description = "Bag of cans",
                 City = "CPH",
-                AvailableFrom = DateTime.UtcNow,
-                AvailableTo = DateTime.UtcNow.AddHours(2),
+                AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow),
+                AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(2)),
                 Items = new[] { new { Type = 3, Quantity = 100 } }
             });
             Assert.Equal(HttpStatusCode.Forbidden, badResp.StatusCode);
@@ -168,8 +168,8 @@ namespace PantMigTesting.Endpoints
                 Title = "Cans",
                 Description = "Bag of cans",
                 City = "CPH",
-                AvailableFrom = DateTime.UtcNow,
-                AvailableTo = DateTime.UtcNow.AddHours(2),
+                AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow),
+                AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(2)),
                 Items = new[] { new { Type = 3, Quantity = 100 } }
             });
 
@@ -193,8 +193,8 @@ namespace PantMigTesting.Endpoints
                 Title = "Cans",
                 Description = "Bag of cans",
                 City = "CPH",
-                AvailableFrom = DateTime.UtcNow,
-                AvailableTo = DateTime.UtcNow.AddHours(2),
+                AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow),
+                AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(2)),
                 Items = new[] { new { Type = 3, Quantity = 50 } }
             });
             createResp.EnsureSuccessStatusCode();
@@ -251,8 +251,8 @@ namespace PantMigTesting.Endpoints
                 Title = "Bottles",
                 Description = "Box of bottles",
                 City = "CPH",
-                AvailableFrom = DateTime.UtcNow,
-                AvailableTo = DateTime.UtcNow.AddHours(2),
+                AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow),
+                AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(2)),
                 Items = new[] { new { Type = 1, Quantity = 25 } }
             });
             createResp.EnsureSuccessStatusCode();
@@ -291,8 +291,8 @@ namespace PantMigTesting.Endpoints
                 Title = "Cans to cancel",
                 Description = "Bag of cans",
                 City = "CPH",
-                AvailableFrom = DateTime.UtcNow,
-                AvailableTo = DateTime.UtcNow.AddHours(2),
+                AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow),
+                AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(2)),
                 Items = new[] { new { Type = 3, Quantity = 10 } }
             });
             createResp.EnsureSuccessStatusCode();

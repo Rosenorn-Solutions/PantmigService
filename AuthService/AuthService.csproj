@@ -36,9 +36,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="postal_codes_da.csv" Condition="Exists('postal_codes_da.csv')">
+    <Content Include="postal_codes_da.csv" Condition="Exists('postal_codes_da.csv')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+    </Content>
   </ItemGroup>
 
 </Project>

@@ -116,11 +116,11 @@ namespace PantmigService.Migrations
                     b.Property<string>("AssignedRecyclerUserId")
                         .HasColumnType("nvarchar(max)");
 
-                    b.Property<DateTime>("AvailableFrom")
-                        .HasColumnType("datetime2");
+                    b.Property<DateOnly>("AvailableFrom")
+                        .HasColumnType("date");
 
-                    b.Property<DateTime>("AvailableTo")
-                        .HasColumnType("datetime2");
+                    b.Property<DateOnly>("AvailableTo")
+                        .HasColumnType("date");
 
                     b.Property<string>("ChatSessionId")
                         .HasColumnType("nvarchar(max)");
@@ -166,6 +166,12 @@ namespace PantmigService.Migrations
 
                     b.Property<DateTime?>("PickupConfirmedAt")
                         .HasColumnType("datetime2");
+
+                    b.Property<TimeOnly?>("PickupTimeFrom")
+                        .HasColumnType("time");
+
+                    b.Property<TimeOnly?>("PickupTimeTo")
+                        .HasColumnType("time");
 
                     b.Property<byte[]>("ReceiptImageBytes")
                         .HasColumnType("varbinary(max)");
