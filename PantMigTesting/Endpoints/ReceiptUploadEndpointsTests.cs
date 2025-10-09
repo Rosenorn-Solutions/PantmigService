@@ -36,8 +36,8 @@ public class ReceiptUploadEndpointsTests
             Title = "Cans",
             Description = "Bag of cans",
             City = "CPH",
-            AvailableFrom = DateTime.UtcNow,
-            AvailableTo = DateTime.UtcNow.AddHours(2),
+            AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow),
+            AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(2)),
             Items = new[] { new { Type = 3, Quantity = 50 } } // Can
         });
         createResp.EnsureSuccessStatusCode();

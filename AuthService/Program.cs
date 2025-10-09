@@ -46,6 +46,15 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
     options.Lockout.MaxFailedAccessAttempts = 5;
     options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
     options.User.RequireUniqueEmail = true;
+    // Extend allowed username characters to include Danish letters
+    const string danishLetters = "Ê¯Â∆ÿ≈"; // keep local letters
+    foreach (var ch in danishLetters)
+    {
+        if (!options.User.AllowedUserNameCharacters.Contains(ch, StringComparison.Ordinal))
+        {
+            options.User.AllowedUserNameCharacters += ch;
+        }
+    }
 })
 .AddEntityFrameworkStores<ApplicationDbContext>()
 .AddDefaultTokenProviders();

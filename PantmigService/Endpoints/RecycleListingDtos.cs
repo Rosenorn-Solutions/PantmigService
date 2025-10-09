@@ -11,8 +11,10 @@ public record RecycleListingResponse
     public string Title { get; init; } = string.Empty;
     public string Description { get; init; } = string.Empty;
     public decimal? EstimatedValue { get; init; }
-    public DateTime AvailableFrom { get; init; }
-    public DateTime AvailableTo { get; init; }
+    public DateOnly AvailableFrom { get; init; }
+    public DateOnly AvailableTo { get; init; }
+    public TimeOnly? PickupTimeFrom { get; init; }
+    public TimeOnly? PickupTimeTo { get; init; }
     public string CreatedByUserId { get; init; } = string.Empty;
     public DateTime CreatedAt { get; init; }
     public bool IsActive { get; init; }
@@ -39,6 +41,8 @@ public static class RecycleListingMapper
             EstimatedValue = l.EstimatedValue,
             AvailableFrom = l.AvailableFrom,
             AvailableTo = l.AvailableTo,
+            PickupTimeFrom = l.PickupTimeFrom,
+            PickupTimeTo = l.PickupTimeTo,
             CreatedByUserId = l.CreatedByUserId,
             CreatedAt = l.CreatedAt,
             IsActive = l.IsActive,

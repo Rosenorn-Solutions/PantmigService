@@ -37,8 +37,8 @@ public class ListingImageCreationTests
         form.Add(new StringContent("Listing with images"), "Title");
         form.Add(new StringContent("Some description"), "Description");
         form.Add(new StringContent("CPH"), "City");
-        form.Add(new StringContent(DateTime.UtcNow.ToString("O")), "AvailableFrom");
-        form.Add(new StringContent(DateTime.UtcNow.AddHours(4).ToString("O")), "AvailableTo");
+        form.Add(new StringContent(DateOnly.FromDateTime(DateTime.UtcNow).ToString("O")), "AvailableFrom");
+        form.Add(new StringContent(DateOnly.FromDateTime(DateTime.UtcNow.AddDays(4)).ToString("O")), "AvailableTo");
         // Items field as JSON
         var itemsJson = "[{\"Type\":3,\"Quantity\":10}]"; // Type=3 (Can), Quantity=10
         form.Add(new StringContent(itemsJson, Encoding.UTF8, "application/json"), "Items");

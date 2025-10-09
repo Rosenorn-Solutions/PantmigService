@@ -17,7 +17,7 @@ namespace PantmigService.Endpoints
     public static class RecycleListingEndpoints
     {
         public record CreateRecycleListingItemRequest(RecycleMaterialType Type, int Quantity, string? DepositClass, decimal? EstimatedDepositPerUnit);
-        public record CreateRecycleListingRequest(string Title, string Description, string? City, string? Location, DateTime AvailableFrom, DateTime AvailableTo, List<CreateRecycleListingItemRequest> Items);
+        public record CreateRecycleListingRequest(string Title, string Description, string? City, string? Location, DateOnly AvailableFrom, DateOnly AvailableTo, TimeOnly? PickupTimeFrom, TimeOnly? PickupTimeTo, List<CreateRecycleListingItemRequest> Items);
         public record PickupRequest(int ListingId);
         public record AcceptRequest(int ListingId, string RecyclerUserId);
         public record ChatStartRequest(int ListingId);
@@ -168,7 +168,7 @@ namespace PantmigService.Endpoints
 
                     var rawItems = parseResult.RawItems;
                     var itemInputs = rawItems?.Select(i => new CreateListingItemInput(i.Type, i.Quantity, i.DepositClass, i.EstimatedDepositPerUnit)).ToList();
-                    var validation = validator.ValidateCreate(parseResult.Title, parseResult.Description, parseResult.City, parseResult.Location, parseResult.AvailableFrom, parseResult.AvailableTo, itemInputs);
+                    var validation = validator.ValidateCreate(parseResult.Title, parseResult.Description, parseResult.City, parseResult.Location, parseResult.AvailableFrom, parseResult.AvailableTo, parseResult.PickupTimeFrom, parseResult.PickupTimeTo, itemInputs);
                     if (!validation.IsValid)
                     {
                         var vp = validation.Problem!;
@@ -184,6 +184,8 @@ namespace PantmigService.Endpoints
                         Description = v.Description,
                         AvailableFrom = v.AvailableFrom,
                         AvailableTo = v.AvailableTo,
+                        PickupTimeFrom = v.PickupTimeFrom,
+                        PickupTimeTo = v.PickupTimeTo,
                         CreatedByUserId = userId,
                         CreatedAt = DateTime.UtcNow,
                         IsActive = true,
@@ -215,7 +217,7 @@ namespace PantmigService.Endpoints
             {
                 op.OperationId = "Listings_Create";
                 op.Summary = "Create a new listing";
-                op.Description = "Creates a new recycle listing with structured item contents. Supports either JSON body (application/json) or multipart/form-data (fields: title, description, city/location, availableFrom, availableTo, items as JSON string, images as image/*). Requires a verified Donator.";
+                op.Description = "Creates a new recycle listing with structured item contents. Supports either JSON body (application/json) or multipart/form-data (fields: title, description, city/location, availableFrom, availableTo, optional pickupTimeFrom/pickupTimeTo, items as JSON string, images as image/*). Requires a verified Donator.";
 
                 // Ensure requestBody with both content types
                 op.RequestBody = new OpenApiRequestBody
@@ -246,8 +248,10 @@ namespace PantmigService.Endpoints
                                     ["description"] = new OpenApiSchema { Type = "string" },
                                     ["city"] = new OpenApiSchema { Type = "string" },
                                     ["location"] = new OpenApiSchema { Type = "string", Nullable = true },
-                                    ["availableFrom"] = new OpenApiSchema { Type = "string", Format = "date-time" },
-                                    ["availableTo"] = new OpenApiSchema { Type = "string", Format = "date-time" },
+                                    ["availableFrom"] = new OpenApiSchema { Type = "string", Format = "date" },
+                                    ["availableTo"] = new OpenApiSchema { Type = "string", Format = "date" },
+                                    ["pickupTimeFrom"] = new OpenApiSchema { Type = "string", Format = "time", Nullable = true },
+                                    ["pickupTimeTo"] = new OpenApiSchema { Type = "string", Format = "time", Nullable = true },
                                     ["items"] = new OpenApiSchema
                                     {
                                         Description = "JSON array of items example: [{\"type\":1,\"quantity\":10}]",

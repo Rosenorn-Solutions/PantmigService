@@ -23,7 +23,9 @@ public class ValidationServicesTests
     [Fact]
     public void ValidateCreate_Fails_When_TitleMissing()
     {
-        var res = _listingValidator.ValidateCreate(null, "desc", "City", null, DateTime.UtcNow, DateTime.UtcNow.AddHours(1), new());
+        var from = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+        var to = from.AddDays(1);
+        var res = _listingValidator.ValidateCreate(null, "desc", "City", null, from, to, null, null, new());
         Assert.False(res.IsValid);
         Assert.Equal("Validation error", res.Problem!.Title);
     }
@@ -31,9 +33,9 @@ public class ValidationServicesTests
     [Fact]
     public void ValidateCreate_Fails_When_Dates_Invalid()
     {
-        var from = DateTime.UtcNow;
-        var to = from;
-        var res = _listingValidator.ValidateCreate("Title", "Desc", "City", null, from, to, new());
+        var from = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+        var to = from; // same day invalid per rule (must be after)
+        var res = _listingValidator.ValidateCreate("Title", "Desc", "City", null, from, to, null, null, new());
         Assert.False(res.IsValid);
         Assert.Contains("AvailableTo", res.Problem!.Detail);
     }
@@ -41,7 +43,9 @@ public class ValidationServicesTests
     [Fact]
     public void ValidateCreate_Fails_When_No_Items()
     {
-        var res = _listingValidator.ValidateCreate("T", "D", "City", null, DateTime.UtcNow, DateTime.UtcNow.AddHours(1), new());
+        var from = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+        var to = from.AddDays(1);
+        var res = _listingValidator.ValidateCreate("T", "D", "City", null, from, to, null, null, new());
         Assert.False(res.IsValid);
         Assert.Contains("At least one item", res.Problem!.Detail);
     }
@@ -49,8 +53,10 @@ public class ValidationServicesTests
     [Fact]
     public void ValidateCreate_Fails_When_Item_Quantity_Invalid()
     {
+        var from = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+        var to = from.AddDays(1);
         var items = new List<CreateListingItemInput> { new(RecycleMaterialType.Can, 0, null, null) };
-        var res = _listingValidator.ValidateCreate("T", "D", "City", null, DateTime.UtcNow, DateTime.UtcNow.AddHours(1), items);
+        var res = _listingValidator.ValidateCreate("T", "D", "City", null, from, to, null, null, items);
         Assert.False(res.IsValid);
         Assert.Contains("greater than", res.Problem!.Detail);
     }
@@ -58,8 +64,10 @@ public class ValidationServicesTests
     [Fact]
     public void ValidateCreate_Fails_When_Item_Quantity_Too_Large()
     {
+        var from = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+        var to = from.AddDays(1);
         var items = new List<CreateListingItemInput> { new(RecycleMaterialType.Can, 10_001, null, null) };
-        var res = _listingValidator.ValidateCreate("T", "D", "City", null, DateTime.UtcNow, DateTime.UtcNow.AddHours(1), items);
+        var res = _listingValidator.ValidateCreate("T", "D", "City", null, from, to, null, null, items);
         Assert.False(res.IsValid);
         Assert.Contains("too large", res.Problem!.Detail);
     }
@@ -67,13 +75,15 @@ public class ValidationServicesTests
     [Fact]
     public void ValidateCreate_Computes_Estimated_Value()
     {
+        var from = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+        var to = from.AddDays(1);
         var items = new List<CreateListingItemInput>
         {
             new(RecycleMaterialType.Can, 10, null, 0.5m),
             new(RecycleMaterialType.PlasticBottle, 5, null, null),
             new(RecycleMaterialType.GlassBottle, 2, null, 1.25m)
         };
-        var res = _listingValidator.ValidateCreate("T", "D", "City", null, DateTime.UtcNow, DateTime.UtcNow.AddHours(1), items);
+        var res = _listingValidator.ValidateCreate("T", "D", "City", null, from, to, null, null, items);
         Assert.True(res.IsValid);
         // 10*0.5 + 2*1.25 = 5 + 2.5 = 7.5
         Assert.Equal(7.5m, res.Value!.EstimatedValue);
@@ -155,8 +165,8 @@ public class ValidationServicesTests
             Title = "T",
             Description = "D",
             City = "C",
-            AvailableFrom = DateTime.UtcNow,
-            AvailableTo = DateTime.UtcNow.AddHours(1),
+            AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow.Date),
+            AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(1)),
             Items = new[] { new { Type = (int)RecycleMaterialType.Can, Quantity = 1 } }
         }));
         ctx.Request.ContentType = "application/json";
@@ -190,8 +200,8 @@ public class ValidationServicesTests
         formContent.Add(new StringContent("T"), "Title");
         formContent.Add(new StringContent("D"), "Description");
         formContent.Add(new StringContent("C"), "City");
-        formContent.Add(new StringContent(DateTime.UtcNow.ToString("O")), "AvailableFrom");
-        formContent.Add(new StringContent(DateTime.UtcNow.AddHours(1).ToString("O")), "AvailableTo");
+        formContent.Add(new StringContent(DateOnly.FromDateTime(DateTime.UtcNow.Date).ToString("yyyy-MM-dd")), "AvailableFrom");
+        formContent.Add(new StringContent(DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(1)).ToString("yyyy-MM-dd")), "AvailableTo");
         formContent.Add(new StringContent("[{\"Type\":3,\"Quantity\":1}]"), "Items");
         var bytes = Encoding.UTF8.GetBytes("hello");
         formContent.Add(new ByteArrayContent(bytes){ Headers = { ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain") } }, "images", "note.txt");

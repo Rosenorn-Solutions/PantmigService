@@ -24,8 +24,10 @@ public record CreateListingValidated(
     string Title,
     string Description,
     string CityInput,
-    DateTime AvailableFrom,
-    DateTime AvailableTo,
+    DateOnly AvailableFrom,
+    DateOnly AvailableTo,
+    TimeOnly? PickupTimeFrom,
+    TimeOnly? PickupTimeTo,
     List<CreateListingItemInput> Items,
     decimal? EstimatedValue);
 
@@ -36,8 +38,10 @@ public interface IRecycleListingValidationService
         string? description,
         string? city,
         string? location,
-        DateTime availableFrom,
-        DateTime availableTo,
+        DateOnly availableFrom,
+        DateOnly availableTo,
+        TimeOnly? pickupTimeFrom,
+        TimeOnly? pickupTimeTo,
         List<CreateListingItemInput>? items);
 
     ValidationResult<object> ValidateReceiptUpload(IFormFile? file);

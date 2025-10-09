@@ -27,36 +27,29 @@ namespace AuthService.Services
                 return prefixes[index];
             }
 
+            // Keep Danish letters (æøåÆØÅ) and other letters/digits. Remove other diacritics.
             static string TransliterateNordic(string input)
             {
                 if (string.IsNullOrEmpty(input)) return string.Empty;
-                var sb = new StringBuilder(input)
-                    .Replace("Æ", "AE").Replace("æ", "ae")
-                    .Replace("Ø", "OE").Replace("ø", "oe")
-                    .Replace("Å", "AA").Replace("å", "aa");
 
-                // Remove diacritics for the rest
-                var normalized = sb.ToString().Normalize(NormalizationForm.FormD);
+                var normalized = input.Normalize(NormalizationForm.FormD);
                 var filtered = new StringBuilder();
                 foreach (var ch in normalized)
                 {
-                    var unicodeCategory = CharUnicodeInfo.GetUnicodeCategory(ch);
-                    if (unicodeCategory != UnicodeCategory.NonSpacingMark)
+                    var cat = CharUnicodeInfo.GetUnicodeCategory(ch);
+                    if (cat == UnicodeCategory.NonSpacingMark)
+                    {
+                        // skip combining marks
+                        continue;
+                    }
+
+                    if (char.IsLetterOrDigit(ch) || ch == '-' || ch == '.' || ch == '_' || ch == '@' || ch == '+')
                     {
                         filtered.Append(ch);
                     }
                 }
-                var noDiacritics = filtered.ToString().Normalize(NormalizationForm.FormC);
-
-                var allowed = new StringBuilder(noDiacritics.Length);
-                foreach (var ch in noDiacritics)
-                {
-                    if (char.IsLetterOrDigit(ch) || ch == '-' || ch == '.' || ch == '_' || ch == '@' || ch == '+')
-                    {
-                        allowed.Append(ch);
-                    }
-                }
-                return allowed.ToString();
+                // Recompose
+                return filtered.ToString().Normalize(NormalizationForm.FormC);
             }
 
             static string ScrambleName(string? firstName, string? lastName)
@@ -80,7 +73,7 @@ namespace AuthService.Services
                 var fragment = new string([.. chars.Take(take)]);
                 if (fragment.Length < 3)
                 {
-                    const string letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+                    const string letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZÆØÅ"; // include Danish letters for padding if needed
                     var sb = new StringBuilder(fragment);
                     while (sb.Length < 3)
                     {
@@ -93,7 +86,7 @@ namespace AuthService.Services
 
             string baseUsername()
             {
-                var prefix = TransliterateNordic(SelectRandomPrefix());
+                var prefix = TransliterateNordic(SelectRandomPrefix()); // will preserve Danish letters
                 if (string.IsNullOrWhiteSpace(prefix)) prefix = "User";
                 var scrambled = ScrambleName(firstName, lastName);
                 return $"{prefix}-{scrambled}";

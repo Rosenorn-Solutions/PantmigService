@@ -31,8 +31,15 @@ public class CreateListingRequestParser : ICreateListingRequestParser
             string? description = form["Description"].FirstOrDefault() ?? form["description"].FirstOrDefault();
             string? city = form["City"].FirstOrDefault() ?? form["city"].FirstOrDefault();
             string? location = form["Location"].FirstOrDefault() ?? form["location"].FirstOrDefault();
-            DateTime.TryParse(form["AvailableFrom"].FirstOrDefault() ?? form["availableFrom"].FirstOrDefault(), out var availableFrom);
-            DateTime.TryParse(form["AvailableTo"].FirstOrDefault() ?? form["availableTo"].FirstOrDefault(), out var availableTo);
+
+            DateOnly.TryParse(form["AvailableFrom"].FirstOrDefault() ?? form["availableFrom"].FirstOrDefault(), out var availableFrom);
+            DateOnly.TryParse(form["AvailableTo"].FirstOrDefault() ?? form["availableTo"].FirstOrDefault(), out var availableTo);
+            TimeOnly? pickupFrom = null;
+            TimeOnly? pickupTo = null;
+            if (TimeOnly.TryParse(form["PickupTimeFrom"].FirstOrDefault() ?? form["pickupTimeFrom"].FirstOrDefault(), out var tFrom))
+                pickupFrom = tFrom;
+            if (TimeOnly.TryParse(form["PickupTimeTo"].FirstOrDefault() ?? form["pickupTimeTo"].FirstOrDefault(), out var tTo))
+                pickupTo = tTo;
 
             List<RecycleListingEndpoints.CreateRecycleListingItemRequest>? rawItems = null;
             var itemsJson = form["Items"].FirstOrDefault() ?? form["items"].FirstOrDefault();
@@ -97,6 +104,8 @@ public class CreateListingRequestParser : ICreateListingRequestParser
                 Location = location,
                 AvailableFrom = availableFrom,
                 AvailableTo = availableTo,
+                PickupTimeFrom = pickupFrom,
+                PickupTimeTo = pickupTo,
                 RawItems = rawItems,
                 Images = images
             };
@@ -118,6 +127,8 @@ public class CreateListingRequestParser : ICreateListingRequestParser
                     Location = body.Location,
                     AvailableFrom = body.AvailableFrom,
                     AvailableTo = body.AvailableTo,
+                    PickupTimeFrom = body.PickupTimeFrom,
+                    PickupTimeTo = body.PickupTimeTo,
                     RawItems = body.Items
                 };
             }
