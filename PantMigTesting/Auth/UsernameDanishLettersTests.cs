@@ -43,13 +43,7 @@ namespace PantMigTesting.Auth
                 options.Password.RequireUppercase = true;
                 options.Password.RequireNonAlphanumeric = true;
                 options.User.RequireUniqueEmail = true;
-                // Allow Danish letters in usernames like production
-                const string danish = "זרוֶ״ֵ";
-                foreach (var ch in danish)
-                {
-                    if (!options.User.AllowedUserNameCharacters.Contains(ch))
-                        options.User.AllowedUserNameCharacters += ch;
-                }
+                // Use default AllowedUserNameCharacters without Danish letters
             })
             .AddEntityFrameworkStores<ApplicationDbContext>()
             .AddDefaultTokenProviders();
@@ -87,18 +81,15 @@ namespace PantMigTesting.Auth
         }
 
         [Fact]
-        public async Task UsernameGenerator_Produces_Danish_Letters_And_CreateUser_Succeeds()
+        public async Task UsernameGenerator_Produces_ASCII_Only_And_CreateUser_Succeeds()
         {
             using var sp = BuildServiceProvider();
             var (userManager, _, gen, _, _) = Resolve(sp);
 
-            var username = await gen.GenerateAsync("ורז", "ורז");
+            var username = await gen.GenerateAsync("ורז", "ֵ״ֶ");
 
-            // Assert that username contains at least one Danish letter (case-insensitive by explicit set)
-            Assert.True(
-                username.IndexOfAny(new[] { 'ז', 'ר', 'ו', 'ֶ', '״', 'ֵ' }) >= 0,
-                $"Username '{username}' should contain at least one Danish letter [זרוֶ״ֵ]"
-            );
+            // Assert username contains ASCII only (no Danish letters)
+            Assert.True(username.All(ch => ch <= 127), $"Username '{username}' should be ASCII only");
 
             var user = new ApplicationUser
             {
@@ -111,7 +102,7 @@ namespace PantMigTesting.Auth
         }
 
         [Fact]
-        public async Task RegisterAsync_Allows_Danish_Usernames()
+        public async Task RegisterAsync_Allows_ASCII_Usernames()
         {
             using var sp = BuildServiceProvider();
             var (userManager, roleManager, gen, auth, _) = Resolve(sp);
@@ -121,16 +112,17 @@ namespace PantMigTesting.Auth
 
             var req = new RegisterRequest
             {
-                Email = "danish@example.com",
+                Email = "ascii@example.com",
                 Password = "Password!1",
                 FirstName = "ורז",
-                LastName = "ורז",
+                LastName = "ֵ״ֶ",
                 UserType = UserType.Recycler
             };
 
             var (ok, err, user) = await auth.RegisterAsync(req, cityId: null, userManager, roleManager, new FakeTokenService(), gen);
             Assert.True(ok, err);
             Assert.NotNull(user);
+            Assert.True(user!.UserName!.All(ch => ch <= 127), "Generated username should be ASCII only");
         }
     }
 }

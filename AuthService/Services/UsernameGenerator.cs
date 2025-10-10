@@ -27,10 +27,16 @@ namespace AuthService.Services
                 return prefixes[index];
             }
 
-            // Keep Danish letters (æøåÆØÅ) and other letters/digits. Remove other diacritics.
-            static string TransliterateNordic(string input)
+            // Transliterate to ASCII-only characters compatible with Identity's default AllowedUserNameCharacters
+            static string TransliterateAscii(string input)
             {
                 if (string.IsNullOrEmpty(input)) return string.Empty;
+
+                // Map Danish letters explicitly
+                input = input
+                    .Replace("æ", "ae").Replace("Æ", "AE")
+                    .Replace("ø", "o").Replace("Ø", "O")
+                    .Replace("å", "a").Replace("Å", "A");
 
                 var normalized = input.Normalize(NormalizationForm.FormD);
                 var filtered = new StringBuilder();
@@ -39,28 +45,36 @@ namespace AuthService.Services
                     var cat = CharUnicodeInfo.GetUnicodeCategory(ch);
                     if (cat == UnicodeCategory.NonSpacingMark)
                     {
-                        // skip combining marks
-                        continue;
+                        continue; // skip combining marks
                     }
 
-                    if (char.IsLetterOrDigit(ch) || ch == '-' || ch == '.' || ch == '_' || ch == '@' || ch == '+')
+                    // Keep only ASCII letters/digits and allowed username punctuation
+                    if ((ch <= 127) && (char.IsLetterOrDigit(ch) || ch == '-' || ch == '.' || ch == '_' || ch == '@' || ch == '+'))
                     {
                         filtered.Append(ch);
                     }
                 }
-                // Recompose
-                return filtered.ToString().Normalize(NormalizationForm.FormC);
+                return filtered.ToString();
             }
 
             static string ScrambleName(string? firstName, string? lastName)
             {
-                var cleanedFirstName = TransliterateNordic(firstName ?? string.Empty);
+                var cleanedFirstName = TransliterateAscii(firstName ?? string.Empty);
                 cleanedFirstName = new string([.. cleanedFirstName.Where(char.IsLetter)]);
-                var cleanedLastName = TransliterateNordic(lastName ?? string.Empty);
+                var cleanedLastName = TransliterateAscii(lastName ?? string.Empty);
                 cleanedLastName = new string([.. cleanedLastName.Where(char.IsLetter)]);
 
-                if (string.IsNullOrWhiteSpace(cleanedFirstName) || string.IsNullOrWhiteSpace(cleanedLastName)) 
-                    throw new InvalidOperationException("Failed to generate Username");
+                // Fallback if names do not contain letters after transliteration
+                if (string.IsNullOrWhiteSpace(cleanedFirstName) && string.IsNullOrWhiteSpace(cleanedLastName))
+                {
+                    const string letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+                    var buf = new char[3];
+                    for (int i = 0; i < buf.Length; i++) buf[i] = letters[RandomNumberGenerator.GetInt32(letters.Length)];
+                    return new string(buf);
+                }
+
+                if (string.IsNullOrWhiteSpace(cleanedFirstName)) cleanedFirstName = "USER";
+                if (string.IsNullOrWhiteSpace(cleanedLastName)) cleanedLastName = "NAME";
 
                 var chars = cleanedFirstName.ToUpperInvariant().ToCharArray().Concat(cleanedLastName.ToUpperInvariant().ToCharArray()).ToArray();
 
@@ -73,7 +87,7 @@ namespace AuthService.Services
                 var fragment = new string([.. chars.Take(take)]);
                 if (fragment.Length < 3)
                 {
-                    const string letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZÆØÅ"; // include Danish letters for padding if needed
+                    const string letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"; // ASCII only
                     var sb = new StringBuilder(fragment);
                     while (sb.Length < 3)
                     {
@@ -86,7 +100,7 @@ namespace AuthService.Services
 
             string baseUsername()
             {
-                var prefix = TransliterateNordic(SelectRandomPrefix()); // will preserve Danish letters
+                var prefix = TransliterateAscii(SelectRandomPrefix());
                 if (string.IsNullOrWhiteSpace(prefix)) prefix = "User";
                 var scrambled = ScrambleName(firstName, lastName);
                 return $"{prefix}-{scrambled}";
