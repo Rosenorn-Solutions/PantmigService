@@ -50,7 +50,7 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
     const string danishLetters = "Ê¯Â∆ÿ≈"; // keep local letters
     foreach (var ch in danishLetters)
     {
-        if (!options.User.AllowedUserNameCharacters.Contains(ch, StringComparison.Ordinal))
+        if (!options.User.AllowedUserNameCharacters.Contains(ch))
         {
             options.User.AllowedUserNameCharacters += ch;
         }
