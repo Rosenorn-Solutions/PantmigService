@@ -270,6 +270,7 @@ namespace PantmigService.Endpoints
                 };
                 return op;
             })
+            .WithMetadata(new RequestSizeLimitAttribute(64L * 1024 * 1024))
             .Produces<RecycleListingResponse>(StatusCodes.Status201Created, contentType: "application/json")
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized);
@@ -566,6 +567,7 @@ namespace PantmigService.Endpoints
                 op.Description = "Recycler uploads the receipt image as multipart/form-data with fields: listingId, reportedAmount, file. This does not affect listing status and is available even after completion.";
                 return op;
             })
+            .WithMetadata(new RequestSizeLimitAttribute(64L * 1024 * 1024))
             .Produces(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized);

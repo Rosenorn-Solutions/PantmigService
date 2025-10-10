@@ -14,6 +14,8 @@ using PantmigService.Seed;
 using System.Linq;
 using PantmigService.Security;
 using PantmigService.Endpoints.Helpers;
+using Microsoft.AspNetCore.Http.Features;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 
 namespace PantmigService
 {
@@ -38,6 +40,17 @@ namespace PantmigService
                 .CreateLogger();
 
             builder.Host.UseSerilog();
+
+            // Increase body size limits to support multi-image uploads via multipart/form-data
+            const long MaxRequestBytes = 64L * 1024 * 1024; // 64 MB
+            builder.WebHost.ConfigureKestrel(options =>
+            {
+                options.Limits.MaxRequestBodySize = MaxRequestBytes;
+            });
+            builder.Services.Configure<FormOptions>(options =>
+            {
+                options.MultipartBodyLengthLimit = MaxRequestBytes; // applies to form uploads
+            });
 
             builder.Services.AddAuthorizationBuilder()
                 .AddPolicy("VerifiedDonator", policy =>
