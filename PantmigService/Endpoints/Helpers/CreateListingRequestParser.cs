@@ -47,7 +47,9 @@ public class CreateListingRequestParser : ICreateListingRequestParser
             {
                 try
                 {
-                    rawItems = JsonSerializer.Deserialize<List<RecycleListingEndpoints.CreateRecycleListingItemRequest>>(itemsJson);
+                    // Accept both camelCase and PascalCase item property names
+                    var jsonOptions = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                    rawItems = JsonSerializer.Deserialize<List<RecycleListingEndpoints.CreateRecycleListingItemRequest>>(itemsJson, jsonOptions);
                 }
                 catch
                 {
