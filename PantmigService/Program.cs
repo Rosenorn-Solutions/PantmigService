@@ -180,6 +180,7 @@ namespace PantmigService
             builder.Services.AddScoped<IFileValidationService, FileValidationService>();
             builder.Services.AddScoped<IChatValidationService, ChatValidationService>();
             builder.Services.AddScoped<ICreateListingRequestParser, CreateListingRequestParser>();
+            builder.Services.AddScoped<IStatisticsService, StatisticsService>();
 
             // Antivirus scanner (ClamAV)
             var clamSection = builder.Configuration.GetSection("ClamAV");
@@ -224,6 +225,7 @@ namespace PantmigService
             // Endpoints
             app.MapRecycleListingEndpoints();
             app.MapCityEndpoints();
+            app.MapStatisticsEndpoints();
             app.MapHub<ChatHub>("/hubs/chat");
 
             app.Run();

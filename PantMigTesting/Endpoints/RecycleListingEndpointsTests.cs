@@ -99,6 +99,7 @@ namespace PantMigTesting.Endpoints
                     services.AddScoped<IFileValidationService, FileValidationService>();
                     services.AddScoped<IChatValidationService, ChatValidationService>();
                     services.AddScoped<ICreateListingRequestParser, CreateListingRequestParser>();
+                    services.AddScoped<IStatisticsService, StatisticsService>();
 
                     // Register a no-op antivirus scanner for tests
                     services.AddSingleton<IAntivirusScanner, NoOpAntivirusScanner>();
@@ -117,6 +118,7 @@ namespace PantMigTesting.Endpoints
                     app.UseEndpoints(endpoints =>
                     {
                         endpoints.MapRecycleListingEndpoints();
+                        endpoints.MapStatisticsEndpoints();
                     });
                 });
 
