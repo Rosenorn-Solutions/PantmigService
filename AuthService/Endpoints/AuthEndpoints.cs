@@ -26,6 +26,45 @@ namespace AuthService.Endpoints
         {
             var group = app.MapGroup("/auth").WithTags("Auth");
 
+            // Quick availability checks for registration UX
+            group.MapGet("/check-email", async (string email, UserManager<ApplicationUser> userManager, CancellationToken ct) =>
+            {
+                if (string.IsNullOrWhiteSpace(email))
+                    return Results.BadRequest(new { error = "Email is required" });
+
+                var normalized = userManager.NormalizeEmail(email.Trim());
+                var taken = await userManager.Users.AnyAsync(u => u.NormalizedEmail == normalized, ct);
+                return Results.Ok(new AvailabilityResult { Taken = taken });
+            })
+            .WithOpenApi(op =>
+            {
+                op.OperationId = "Auth_CheckEmail";
+                op.Summary = "Check if email is already taken";
+                op.Description = "Returns whether a user with the provided email already exists.";
+                return op;
+            })
+            .Produces<AvailabilityResult>(StatusCodes.Status200OK, contentType: "application/json")
+            .Produces(StatusCodes.Status400BadRequest);
+
+            group.MapGet("/check-phone", async (string phone, UserManager<ApplicationUser> userManager, CancellationToken ct) =>
+            {
+                if (string.IsNullOrWhiteSpace(phone))
+                    return Results.BadRequest(new { error = "Phone is required" });
+
+                var normalized = phone.Trim();
+                var taken = await userManager.Users.AnyAsync(u => u.PhoneNumber != null && u.PhoneNumber == normalized, ct);
+                return Results.Ok(new AvailabilityResult { Taken = taken });
+            })
+            .WithOpenApi(op =>
+            {
+                op.OperationId = "Auth_CheckPhone";
+                op.Summary = "Check if phone number is already taken";
+                op.Description = "Returns whether a user with the provided phone number already exists.";
+                return op;
+            })
+            .Produces<AvailabilityResult>(StatusCodes.Status200OK, contentType: "application/json")
+            .Produces(StatusCodes.Status400BadRequest);
+
             group.MapPost("/register", async (RegisterRequest req, UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager, ITokenService tokenService, 
                 ICityResolver cityResolver, 
                 IConfiguration config, 
