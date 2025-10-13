@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using PantmigService.Entities;
 
 namespace PantmigService.Endpoints;
@@ -26,6 +27,8 @@ public record RecycleListingResponse
     public decimal? VerifiedAmount { get; init; }
     public byte[]? ReceiptImageBytes { get; init; }
     public string? ReceiptImageUrl { get; init; }
+    public decimal? MeetingPointLatitude { get; init; }
+    public decimal? MeetingPointLongtitude { get; init; }
     public List<RecycleListingItemResponse> Items { get; init; } = [];
     public List<RecycleListingImageResponse> Images { get; init; } = [];
 }
@@ -54,6 +57,8 @@ public static class RecycleListingMapper
             VerifiedAmount = l.VerifiedAmount,
             ReceiptImageBytes = l.ReceiptImageBytes,
             ReceiptImageUrl = l.ReceiptImageUrl,
+            MeetingPointLatitude = l.MeetingLatitude,
+            MeetingPointLongtitude = l.MeetingLongitude,
             Items = [.. l.Items.Select(i => new RecycleListingItemResponse(i.Id, i.MaterialType, i.Quantity, i.DepositClass, i.EstimatedDepositPerUnit))],
             Images = [.. l.Images.Select(img => new RecycleListingImageResponse(img.Id, img.FileName, img.ContentType, img.Order))]
         };
