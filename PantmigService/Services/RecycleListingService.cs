@@ -5,10 +5,11 @@ using Microsoft.Extensions.Logging;
 
 namespace PantmigService.Services
 {
-    public class RecycleListingService(PantmigDbContext db, ILogger<RecycleListingService> logger) : IRecycleListingService
+    public class RecycleListingService(PantmigDbContext db, ILogger<RecycleListingService> logger, INotificationService notifications) : IRecycleListingService
     {
         private readonly PantmigDbContext _db = db;
         private readonly ILogger<RecycleListingService> _logger = logger;
+        private readonly INotificationService _notifications = notifications;
 
         public async Task<RecycleListing> CreateAsync(RecycleListing listing, CancellationToken ct = default)
         {
@@ -102,6 +103,11 @@ namespace PantmigService.Services
             }
 
             await _db.SaveChangesAsync(ct);
+
+            // Notify donator about new application
+            await _notifications.CreateAsync(listing.CreatedByUserId, listing.Id, NotificationType.RecyclerApplied,
+                message: "A recycler has applied to your listing.", ct);
+
             return true;
         }
 
@@ -163,6 +169,11 @@ namespace PantmigService.Services
             listing.AcceptedAt = DateTime.UtcNow;
             await _db.SaveChangesAsync(ct);
             _logger.LogInformation("Listing {ListingId} accepted recycler {Recycler}", id, recyclerUserId);
+
+            // Notify recycler that they were accepted
+            await _notifications.CreateAsync(recyclerUserId, listing.Id, NotificationType.DonorAccepted,
+                message: "Your application was accepted.", ct);
+
             return true;
         }
 
@@ -223,6 +234,14 @@ namespace PantmigService.Services
             listing.MeetingSetAt = DateTime.UtcNow;
             await _db.SaveChangesAsync(ct);
             _logger.LogInformation("Meeting point set for listing {ListingId}", id);
+
+            // Notify recycler that meeting point was set
+            if (!string.IsNullOrEmpty(listing.AssignedRecyclerUserId))
+            {
+                await _notifications.CreateAsync(listing.AssignedRecyclerUserId, listing.Id, NotificationType.MeetingSet,
+                    message: "A meeting point has been set.", ct);
+            }
+
             return true;
         }
 

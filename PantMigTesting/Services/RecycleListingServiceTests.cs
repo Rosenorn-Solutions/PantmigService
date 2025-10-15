@@ -13,6 +13,17 @@ namespace PantMigTesting.Services
 {
     public class RecycleListingServiceTests
     {
+        private sealed class TestNotifications : INotificationService
+        {
+            public Task<Notification> CreateAsync(string userId, int listingId, NotificationType type, string? message = null, System.Threading.CancellationToken ct = default)
+                => Task.FromResult(new Notification { UserId = userId, ListingId = listingId, Type = type, Message = message, CreatedAt = DateTime.UtcNow, IsRead = true });
+
+            public Task<int> MarkReadAsync(string userId, int[] ids, System.Threading.CancellationToken ct = default) => Task.FromResult(0);
+
+            public Task<IReadOnlyList<Notification>> GetRecentAsync(string userId, int take = 50, System.Threading.CancellationToken ct = default)
+                => Task.FromResult<IReadOnlyList<Notification>>(Array.Empty<Notification>());
+        }
+
         private static PantmigDbContext CreateDb()
         {
             var options = new DbContextOptionsBuilder<PantmigDbContext>()
@@ -21,7 +32,7 @@ namespace PantMigTesting.Services
             return new PantmigDbContext(options);
         }
 
-        private static RecycleListingService CreateService(PantmigDbContext db) => new(db, NullLogger<RecycleListingService>.Instance);
+        private static RecycleListingService CreateService(PantmigDbContext db) => new(db, NullLogger<RecycleListingService>.Instance, new TestNotifications());
 
         private static RecycleListing NewListing(string donatorId = "donator-1", DateTime? createdAt = null, bool isActive = true, ListingStatus status = ListingStatus.Created, int quantity = 50)
             => new()

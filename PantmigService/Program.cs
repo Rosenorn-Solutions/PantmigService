@@ -124,9 +124,9 @@ namespace PantmigService
                 {
                     OnMessageReceived = context =>
                     {
-                        var accessToken = context.Request.Query["access_token"];
+                        var accessToken = context.Request.Query["access_token"];                
                         var path = context.HttpContext.Request.Path;
-                        if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs/chat"))
+                        if (!string.IsNullOrEmpty(accessToken) && (path.StartsWithSegments("/hubs/chat") || path.StartsWithSegments("/hubs/notifications")))
                         {
                             context.Token = accessToken;
                         }
@@ -181,6 +181,7 @@ namespace PantmigService
             builder.Services.AddScoped<IChatValidationService, ChatValidationService>();
             builder.Services.AddScoped<ICreateListingRequestParser, CreateListingRequestParser>();
             builder.Services.AddScoped<IStatisticsService, StatisticsService>();
+            builder.Services.AddScoped<INotificationService, NotificationService>();
 
             // Antivirus scanner (ClamAV)
             var clamSection = builder.Configuration.GetSection("ClamAV");
@@ -226,7 +227,9 @@ namespace PantmigService
             app.MapRecycleListingEndpoints();
             app.MapCityEndpoints();
             app.MapStatisticsEndpoints();
+            app.MapNotificationEndpoints();
             app.MapHub<ChatHub>("/hubs/chat");
+            app.MapHub<NotificationsHub>("/hubs/notifications");
 
             app.Run();
         }
