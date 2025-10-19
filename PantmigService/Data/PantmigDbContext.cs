@@ -17,6 +17,7 @@ namespace PantmigService.Data
         public DbSet<RecycleListingItem> RecycleListingItems => Set<RecycleListingItem>();
         public DbSet<RecycleListingImage> RecycleListingImages => Set<RecycleListingImage>();
         public DbSet<Notification> Notifications => Set<Notification>();
+        public DbSet<NewsletterSubscription> NewsletterSubscriptions => Set<NewsletterSubscription>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -105,6 +106,10 @@ namespace PantmigService.Data
 
             modelBuilder.Entity<Notification>()
                 .HasIndex(n => new { n.UserId, n.IsRead, n.CreatedAt });
+
+            modelBuilder.Entity<NewsletterSubscription>()
+                .HasIndex(n => n.Email)
+                .IsUnique();
         }
     }
 }

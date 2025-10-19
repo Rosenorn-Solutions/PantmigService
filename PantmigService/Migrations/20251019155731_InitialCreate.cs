@@ -43,6 +43,40 @@ namespace PantmigService.Migrations
                 });
 
             migrationBuilder.CreateTable(
+                name: "NewsletterSubscriptions",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    Name = table.Column<string>(type: "nvarchar(max)", nullable: false),
+                    Email = table.Column<string>(type: "nvarchar(450)", nullable: false),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    ConfirmedAt = table.Column<DateTime>(type: "datetime2", nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_NewsletterSubscriptions", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "Notifications",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "int", nullable: false)
+                        .Annotation("SqlServer:Identity", "1, 1"),
+                    UserId = table.Column<string>(type: "nvarchar(450)", nullable: false),
+                    ListingId = table.Column<int>(type: "int", nullable: false),
+                    Type = table.Column<int>(type: "int", nullable: false),
+                    Message = table.Column<string>(type: "nvarchar(max)", nullable: true),
+                    CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
+                    IsRead = table.Column<bool>(type: "bit", nullable: false)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_Notifications", x => x.Id);
+                });
+
+            migrationBuilder.CreateTable(
                 name: "CityPostalCodes",
                 columns: table => new
                 {
@@ -193,6 +227,17 @@ namespace PantmigService.Migrations
                 unique: true);
 
             migrationBuilder.CreateIndex(
+                name: "IX_NewsletterSubscriptions_Email",
+                table: "NewsletterSubscriptions",
+                column: "Email",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Notifications_UserId_IsRead_CreatedAt",
+                table: "Notifications",
+                columns: new[] { "UserId", "IsRead", "CreatedAt" });
+
+            migrationBuilder.CreateIndex(
                 name: "IX_RecycleListingApplicants_ListingId_RecyclerUserId",
                 table: "RecycleListingApplicants",
                 columns: new[] { "ListingId", "RecyclerUserId" },
@@ -237,6 +282,12 @@ namespace PantmigService.Migrations
 
             migrationBuilder.DropTable(
                 name: "CityPostalCodes");
+
+            migrationBuilder.DropTable(
+                name: "NewsletterSubscriptions");
+
+            migrationBuilder.DropTable(
+                name: "Notifications");
 
             migrationBuilder.DropTable(
                 name: "RecycleListingApplicants");

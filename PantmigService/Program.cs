@@ -182,6 +182,7 @@ namespace PantmigService
             builder.Services.AddScoped<ICreateListingRequestParser, CreateListingRequestParser>();
             builder.Services.AddScoped<IStatisticsService, StatisticsService>();
             builder.Services.AddScoped<INotificationService, NotificationService>();
+            builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
 
             // Antivirus scanner (ClamAV)
             var clamSection = builder.Configuration.GetSection("ClamAV");
@@ -228,6 +229,8 @@ namespace PantmigService
             app.MapCityEndpoints();
             app.MapStatisticsEndpoints();
             app.MapNotificationEndpoints();
+            app.MapNewsletterEndpoints();
+            app.MapNewsletterUnsubscribe();
             app.MapHub<ChatHub>("/hubs/chat");
             app.MapHub<NotificationsHub>("/hubs/notifications");
 
