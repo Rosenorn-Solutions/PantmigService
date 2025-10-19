@@ -117,6 +117,37 @@ namespace PantmigService.Endpoints
                 return op;
             });
 
+            // One-click unsubscribe (GET) for email clients like Outlook
+            group.MapGet("/unsubscribe", async ([FromQuery] string email, PantmigDbContext db, HttpContext ctx) =>
+            {
+                if (string.IsNullOrWhiteSpace(email))
+                    return Results.BadRequest("Email is required");
+
+                if (!IsValidEmail(email))
+                    return Results.BadRequest("Invalid email");
+
+                var rows = await db.NewsletterSubscriptions
+                    .Where(n => n.Email == email.Trim())
+                    .ToListAsync(ctx.RequestAborted);
+                if (rows.Count > 0)
+                {
+                    db.NewsletterSubscriptions.RemoveRange(rows);
+                    await db.SaveChangesAsync(ctx.RequestAborted);
+                }
+
+                // Small friendly confirmation
+                return Results.Text("You have been unsubscribed.", "text/plain");
+            })
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
+            .WithOpenApi(op =>
+            {
+                op.OperationId = "Newsletter_Unsubscribe_Get";
+                op.Summary = "One-click unsubscribe";
+                op.Description = "Removes the email using a simple GET. Intended for List-Unsubscribe one-click.";
+                return op;
+            });
+
             return app;
         }
 

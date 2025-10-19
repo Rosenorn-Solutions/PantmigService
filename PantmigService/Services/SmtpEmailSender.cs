@@ -17,6 +17,7 @@ namespace PantmigService.Services
     {
         private readonly SmtpOptions _opts;
         private readonly ILogger<SmtpEmailSender> _logger;
+        private readonly string _apiDomain;
 
         public SmtpEmailSender(IConfiguration config, ILogger<SmtpEmailSender> logger)
         {
@@ -30,15 +31,44 @@ namespace PantmigService.Services
                 Password = section["Password"] ?? string.Empty,
                 From = section["From"] ?? section["Username"] ?? string.Empty
             };
+            _apiDomain = config["Domain"] ?? config["Urls"] ?? "pantmig.dk";
         }
 
         public async Task SendAsync(string to, string subject, string body, CancellationToken ct = default)
         {
+            var fromAddress = MailboxAddress.Parse(_opts.From);
+            var displayName = string.IsNullOrWhiteSpace(fromAddress.Name) ? "PantMig" : fromAddress.Name;
+            var from = new MailboxAddress(displayName, fromAddress.Address);
+
             var message = new MimeMessage();
-            message.From.Add(MailboxAddress.Parse(_opts.From));
+            message.From.Add(from);
+            message.Sender = from;
+            message.ReplyTo.Add(from);
             message.To.Add(MailboxAddress.Parse(to));
             message.Subject = subject;
-            message.Body = new TextPart("plain") { Text = body };
+
+            // Set a stable Message-Id using our domain to avoid machine-name IDs
+            try
+            {
+                var domain = from.Address.Split('@').LastOrDefault() ?? "pantmig.dk";
+                message.MessageId = $"{Guid.NewGuid():N}@{domain}";
+            }
+            catch { /* ignore */ }
+
+            // List-Unsubscribe headers (mailto and one-click URL)
+            try
+            {
+                var unsubscribeUrl = $"https://{_apiDomain.TrimEnd('/')}/newsletter/unsubscribe?email={Uri.EscapeDataString(to)}";
+                message.Headers.Add("List-Unsubscribe", $"<mailto:{from.Address}?subject=unsubscribe>, <{unsubscribeUrl}>");
+                message.Headers.Add("List-Unsubscribe-Post", "List-Unsubscribe=One-Click");
+            }
+            catch { /* ignore */ }
+
+            // Multipart/alternative: plain + HTML
+            var plain = new TextPart("plain") { Text = body };
+            var htmlBody = System.Net.WebUtility.HtmlEncode(body).Replace("\n", "<br>");
+            var html = new TextPart("html") { Text = $"<html><body><p>{htmlBody}</p><hr><p style=\"font-size:12px;color:#666\">If you no longer wish to receive emails, you can <a href=\"https://{_apiDomain}/newsletter/unsubscribe?email={System.Uri.EscapeDataString(to)}\">unsubscribe here</a>.</p></body></html>" };
+            message.Body = new MultipartAlternative { plain, html };
 
             using var client = new SmtpClient();
             try
