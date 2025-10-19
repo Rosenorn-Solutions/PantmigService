@@ -191,7 +191,7 @@ builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<ICityResolver, CityResolver>();
 builder.Services.AddScoped<IUsernameGenerator, UsernameGenerator>();
 builder.Services.AddScoped<IAuthService, AuthServiceImpl>();
-builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
+builder.Services.AddScoped<IEmailSender, SmtpEmailSender>();
 
 var app = builder.Build();
 
