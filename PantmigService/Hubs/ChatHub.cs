@@ -13,11 +13,13 @@ namespace PantmigService.Hubs
     {
         private readonly IRecycleListingService _listings;
         private readonly PantmigDbContext _db;
+        private readonly INotificationService _notifications;
 
-        public ChatHub(IRecycleListingService listings, PantmigDbContext db)
+        public ChatHub(IRecycleListingService listings, PantmigDbContext db, INotificationService notifications)
         {
             _listings = listings;
             _db = db;
+            _notifications = notifications;
         }
 
         private string GetUserIdOrThrow()
@@ -122,6 +124,18 @@ namespace PantmigService.Hubs
                 SentAt = now
             };
             await Clients.Group(chatId).SendAsync("ReceiveMessage", payload);
+
+            // Notify the other participant
+            string? recipient = null;
+            if (string.Equals(userId, listing.CreatedByUserId, StringComparison.Ordinal))
+                recipient = listing.AssignedRecyclerUserId;
+            else if (string.Equals(userId, listing.AssignedRecyclerUserId, StringComparison.Ordinal))
+                recipient = listing.CreatedByUserId;
+
+            if (!string.IsNullOrEmpty(recipient))
+            {
+                await _notifications.CreateAsync(recipient, listingId, NotificationType.ChatMessage, message: "New chat message", Context.ConnectionAborted);
+            }
         }
 
         public async Task LeaveListingChat(int listingId)

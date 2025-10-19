@@ -58,10 +58,22 @@ namespace PantMigTesting.Endpoints
         }
     }
 
+
     public static class TestHostBuilder
     {
+        private sealed class TestNotifications : INotificationService
+        {
+            public Task<Notification> CreateAsync(string userId, int listingId, NotificationType type, string? message = null, CancellationToken ct = default)
+                => Task.FromResult(new Notification { UserId = userId, ListingId = listingId, Type = type, Message = message, CreatedAt = DateTime.UtcNow, IsRead = true });
+
+            public Task<int> MarkReadAsync(string userId, int[] ids, CancellationToken ct = default) => Task.FromResult(0);
+
+            public Task<IReadOnlyList<Notification>> GetRecentAsync(string userId, int take = 50, CancellationToken ct = default)
+                => Task.FromResult<IReadOnlyList<Notification>>(Array.Empty<Notification>());
+        }
         public static TestServer CreateServer(string? dbName = null)
         {
+
             // Ensure the in-memory database name is constant for the lifetime of this server instance.
             var databaseName = dbName ?? Guid.NewGuid().ToString();
 
@@ -100,6 +112,7 @@ namespace PantMigTesting.Endpoints
                     services.AddScoped<IChatValidationService, ChatValidationService>();
                     services.AddScoped<ICreateListingRequestParser, CreateListingRequestParser>();
                     services.AddScoped<IStatisticsService, StatisticsService>();
+                    services.AddScoped<INotificationService, TestNotifications>();
 
                     // Register a no-op antivirus scanner for tests
                     services.AddSingleton<IAntivirusScanner, NoOpAntivirusScanner>();

@@ -21,6 +21,17 @@ namespace PantMigTesting.Endpoints;
 
 public class ListingImageCreationTests
 {
+    private sealed class TestNotifications : INotificationService
+    {
+        public Task<Notification> CreateAsync(string userId, int listingId, NotificationType type, string? message = null, CancellationToken ct = default)
+            => Task.FromResult(new Notification { UserId = userId, ListingId = listingId, Type = type, Message = message, CreatedAt = DateTime.UtcNow, IsRead = true });
+
+        public Task<int> MarkReadAsync(string userId, int[] ids, CancellationToken ct = default) => Task.FromResult(0);
+
+        public Task<IReadOnlyList<Notification>> GetRecentAsync(string userId, int take = 50, CancellationToken ct = default)
+            => Task.FromResult<IReadOnlyList<Notification>>(Array.Empty<Notification>());
+    }
+
     [Fact]
     public async Task Create_Listing_With_Images_Multipart_Works()
     {
@@ -118,6 +129,7 @@ public class ListingImageCreationTests
                 });
 
                 services.AddDbContext<PantmigDbContext>(opt => opt.UseInMemoryDatabase(Guid.NewGuid().ToString()));
+                services.AddScoped<INotificationService, TestNotifications>();
                 services.AddScoped<IRecycleListingService, RecycleListingService>();
                 services.AddScoped<ICityResolver, CityResolver>();
                 services.AddScoped<IRecycleListingValidationService, RecycleListingValidationService>();
