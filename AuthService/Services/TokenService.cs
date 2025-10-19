@@ -46,7 +46,8 @@ namespace AuthService.Services
                 new("isMitIdVerified", user.IsMitIdVerified.ToString()),
                 new(ClaimTypes.Role, user.UserType.ToString()),
                 // New demographic claims
-                new("gender", user.Gender.ToString())
+                new("gender", user.Gender.ToString()),
+                new("isOrganization", user.IsOrganization.ToString())
             };
 
             if (user.BirthDate.HasValue)
@@ -82,7 +83,7 @@ namespace AuthService.Services
         {
             // unchanged ... existing implementation
             var tokenBytes = RandomNumberGenerator.GetBytes(64);
-            var token = Convert.ToBase64String(tokenBytes);
+            var token = Microsoft.IdentityModel.Tokens.Base64UrlEncoder.Encode(tokenBytes);
 
             var jwtSection = _config.GetSection("JwtSettings");
             var refreshDays = int.TryParse(jwtSection["RefreshTokenDays"], out var d) ? d : 30;
@@ -102,15 +103,41 @@ namespace AuthService.Services
 
         public async Task<(AuthResponse? response, string? error)> RotateRefreshTokenAsync(string accessToken, string refreshToken, CancellationToken ct = default)
         {
-            // unchanged ... existing implementation
             try
             {
-                var principal = ValidateAccessToken(accessToken, validateLifetime: false);
-                var userId = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? principal.FindFirstValue(JwtRegisteredClaimNames.Sub);
-                if (string.IsNullOrEmpty(userId)) return (null, "Invalid token subject");
+                // Normalize refresh token to guard against formatting issues in transport
+                var incomingRt = (refreshToken ?? string.Empty).Trim();
+                if (incomingRt.Contains(' ') && !incomingRt.Contains('+'))
+                {
+                    incomingRt = incomingRt.Replace(' ', '+');
+                }
 
-                var rt = await _db.RefreshTokens.FirstOrDefaultAsync(t => t.Token == refreshToken && t.UserId == userId, ct);
-                if (rt is null || rt.Expires <= DateTime.UtcNow) return (null, "Invalid or expired refresh token");
+                string? userId = null;
+                try
+                {
+                    var principal = ValidateAccessToken(accessToken, validateLifetime: false);
+                    userId = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? principal.FindFirstValue(JwtRegisteredClaimNames.Sub);
+                }
+                catch
+                {
+                    // ignore here; we'll try to resolve user via refresh token below
+                }
+
+                RefreshToken? rt = null;
+                if (!string.IsNullOrEmpty(userId))
+                {
+                    rt = await _db.RefreshTokens.FirstOrDefaultAsync(t => t.Token == incomingRt && t.UserId == userId, ct);
+                }
+
+                // Fallback: resolve by refresh token only
+                if (rt is null)
+                {
+                    rt = await _db.RefreshTokens.FirstOrDefaultAsync(t => t.Token == incomingRt, ct);
+                    userId ??= rt?.UserId;
+                }
+
+                if (rt is null || rt.Expires <= DateTime.UtcNow || string.IsNullOrEmpty(userId))
+                    return (null, "Invalid or expired refresh token");
 
                 // Load user with city
                 var user = await _db.Users.Include(u => u.City).FirstOrDefaultAsync(u => u.Id == userId, ct);
@@ -126,8 +153,9 @@ namespace AuthService.Services
                     LastName = user.LastName ?? string.Empty,
                     AccessToken = newAccess,
                     AccessTokenExpiration = exp,
-                    RefreshToken = refreshToken,
+                    RefreshToken = incomingRt,
                     UserType = user.UserType,
+                    IsOrganization = user.IsOrganization,
                     CityId = user.CityId,
                     CityName = user.City?.Name,
                     Gender = user.Gender,

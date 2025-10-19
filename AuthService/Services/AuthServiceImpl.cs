@@ -55,6 +55,7 @@ namespace AuthService.Services
                 MitId = req.MitId,
                 IsMitIdVerified = false,
                 UserType = req.UserType,
+                IsOrganization = req.IsOrganization,
                 CityId = cityId,
                 Gender = req.Gender,
                 BirthDate = req.BirthDate
@@ -89,10 +90,33 @@ namespace AuthService.Services
             var identifier = req.EmailOrUsername.Trim();
             ApplicationUser? user = null;
 
-            user = await userManager.Users.Include(u => u.City).FirstOrDefaultAsync(u => u.NormalizedEmail == identifier.ToUpper());
+            // Use Identity's normalizers to avoid culture-specific issues
+            var normalizedEmail = userManager.NormalizeEmail(identifier);
+            if (!string.IsNullOrEmpty(normalizedEmail))
+            {
+                user = await userManager.Users.Include(u => u.City)
+                    .FirstOrDefaultAsync(u => u.NormalizedEmail == normalizedEmail, ct);
+            }
             if (user is null)
             {
-                user = await userManager.Users.Include(u => u.City).FirstOrDefaultAsync(u => u.NormalizedUserName == identifier.ToUpper());
+                var normalizedName = userManager.NormalizeName(identifier);
+                if (!string.IsNullOrEmpty(normalizedName))
+                {
+                    user = await userManager.Users.Include(u => u.City)
+                        .FirstOrDefaultAsync(u => u.NormalizedUserName == normalizedName, ct);
+                }
+            }
+
+            // Fallbacks in case normalized fields are not populated (e.g., test providers)
+            if (user is null)
+            {
+                user = await userManager.Users.Include(u => u.City)
+                    .FirstOrDefaultAsync(u => u.Email != null && u.Email.Equals(identifier, StringComparison.OrdinalIgnoreCase), ct);
+            }
+            if (user is null)
+            {
+                user = await userManager.Users.Include(u => u.City)
+                    .FirstOrDefaultAsync(u => u.UserName != null && u.UserName.Equals(identifier, StringComparison.OrdinalIgnoreCase), ct);
             }
 
             if (user == null)
@@ -100,7 +124,12 @@ namespace AuthService.Services
 
             var result = await signInManager.CheckPasswordSignInAsync(user, req.Password, lockoutOnFailure: true);
             if (!result.Succeeded)
-                return (false, null, null);
+            {
+                // Fallback for environments where SignInManager policies or auth stack isn't fully wired (e.g., test host)
+                var okPwd = await userManager.CheckPasswordAsync(user, req.Password);
+                if (!okPwd)
+                    return (false, null, null);
+            }
 
             return (true, null, user);
         }

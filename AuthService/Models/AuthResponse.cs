@@ -11,6 +11,7 @@
         public string RefreshToken { get; set; } = string.Empty;
         public DateTime AccessTokenExpiration { get; set; }
         public UserType UserType { get; set; }
+        public bool IsOrganization { get; set; }
 
         // New demographic fields
         public Gender Gender { get; set; }

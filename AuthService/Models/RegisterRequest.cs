@@ -17,5 +17,8 @@
 
         // Optional: City (Bopæls by)
         public string? City { get; set; }
+
+        // New: whether the registering account is a company/NGO (organization)
+        public bool IsOrganization { get; set; } = false;
     }
 }

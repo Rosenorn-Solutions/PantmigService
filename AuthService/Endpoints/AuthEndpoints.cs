@@ -114,6 +114,7 @@ namespace AuthService.Endpoints
                     AccessTokenExpiration = exp,
                     RefreshToken = refresh,
                     UserType = user.UserType,
+                    IsOrganization = user.IsOrganization,
                     CityId = user.CityId,
                     CityName = cityName ?? user.City?.Name,
                     Gender = user.Gender,
@@ -153,6 +154,7 @@ namespace AuthService.Endpoints
                     AccessTokenExpiration = exp,
                     RefreshToken = refresh,
                     UserType = user.UserType,
+                    IsOrganization = user.IsOrganization,
                     CityId = user.CityId,
                     CityName = user.City?.Name,
                     Gender = user.Gender,
@@ -221,10 +223,12 @@ namespace AuthService.Endpoints
 
                 // Fetch gender and birthdate from claims if present
                 var genderClaim = user.FindFirst("gender")?.Value;
+                var isOrgClaim = user.FindFirst("isOrganization")?.Value;
                 var birthDateClaim = user.FindFirst("birthDate")?.Value;
                 Gender gender = Enum.TryParse<Gender>(genderClaim, out var g) ? g : Gender.Unknown;
                 DateOnly? birthDate = null;
                 if (DateOnly.TryParse(birthDateClaim, out var bd)) birthDate = bd;
+                bool isOrg = bool.TryParse(isOrgClaim, out var io) && io;
 
                 var dto = new UserInformationDTO
                 {
@@ -237,6 +241,7 @@ namespace AuthService.Endpoints
                     CityName = cityName,
                     Rating = rating,
                     Gender = gender,
+                    IsOrganization = isOrg,
                     BirthDate = birthDate
                 };
                 return Results.Ok(dto);
@@ -270,6 +275,7 @@ namespace AuthService.Endpoints
                     LastName = user.LastName,
                     Phone = user.PhoneNumber ?? string.Empty,
                     CreatedAt = user.CreatedAt,
+                    IsOrganization = user.IsOrganization,
                     CityId = user.CityId,
                     CityName = user.City?.Name,
                     Rating = user.Rating,

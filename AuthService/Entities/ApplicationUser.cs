@@ -16,6 +16,8 @@ namespace AuthService.Entities
         public bool IsMitIdVerified { get; set; } = false;
         public string? MitId { get; set; } = string.Empty;
         public UserType UserType { get; set; } = UserType.Recycler;
+        // True when account represents a non-person entity (company or NGO)
+        public bool IsOrganization { get; set; } = false;
 
         // New demographic fields
         public Gender Gender { get; set; } = Gender.Unknown;
