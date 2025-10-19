@@ -132,8 +132,8 @@ namespace AuthService.Endpoints
                     var baseUrl = "https://auth.pantmig.dk"; // as requested
                     var confirmUrl = $"{baseUrl.TrimEnd('/')}/auth/confirm-email?userId={Uri.EscapeDataString(user.Id)}&token={tokenEnc}";
 
-                    var subject = "Bekræft din e-mail til PantMig";
-                    var body = $"Hej {user.FirstName},\n\nTak for din registrering. Bekræft venligst din e-mail ved at klikke på linket:\n{confirmUrl}\n\nHvis du ikke har oprettet en konto, kan du ignorere denne mail.";
+                    var subject = "BekrÃ¦ft din e-mail til PantMig";
+                    var body = $"Hej {user.FirstName},\n\nTak for din registrering. BekrÃ¦ft venligst din e-mail ved at klikke pÃ¥ linket:\n{confirmUrl}\n\nHvis du ikke har oprettet en konto, kan du ignorere denne mail.";
                     await emailSender.SendAsync(user.Email!, subject, body, httpCtx.RequestAborted);
                 }
                 catch
