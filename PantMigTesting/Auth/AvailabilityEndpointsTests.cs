@@ -67,6 +67,7 @@ public class AvailabilityEndpointsTests
                 services.AddScoped<IUsernameGenerator, UsernameGenerator>();
                 services.AddScoped<IAuthService, AuthServiceImpl>();
                 services.AddScoped<ITokenService, FakeTokenService>();
+                services.AddScoped<IEmailSender, SmtpEmailSender>();
 
                 services.AddMemoryCache();
             })

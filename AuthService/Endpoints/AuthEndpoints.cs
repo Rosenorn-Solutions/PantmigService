@@ -69,7 +69,10 @@ namespace AuthService.Endpoints
                 ICityResolver cityResolver, 
                 IConfiguration config, 
                 IUsernameGenerator usernameGenerator, 
-                IAuthService authService) =>
+                IAuthService authService,
+                IEmailSender emailSender,
+                LinkGenerator links,
+                HttpContext httpCtx) =>
             {
                 if (string.IsNullOrWhiteSpace(req.Email) || string.IsNullOrWhiteSpace(req.Password))
                     return Results.BadRequest(new RegisterResult { Success = false, ErrorMessage = "Email and password are required" });
@@ -120,6 +123,23 @@ namespace AuthService.Endpoints
                     Gender = user.Gender,
                     BirthDate = user.BirthDate
                 };
+
+                // Send email confirmation link
+                try
+                {
+                    var token = await userManager.GenerateEmailConfirmationTokenAsync(user);
+                    var tokenEnc = System.Net.WebUtility.UrlEncode(token);
+                    var baseUrl = "https://auth.pantmig.dk"; // as requested
+                    var confirmUrl = $"{baseUrl.TrimEnd('/')}/auth/confirm-email?userId={Uri.EscapeDataString(user.Id)}&token={tokenEnc}";
+
+                    var subject = "Bekræft din e-mail til PantMig";
+                    var body = $"Hej {user.FirstName},\n\nTak for din registrering. Bekræft venligst din e-mail ved at klikke på linket:\n{confirmUrl}\n\nHvis du ikke har oprettet en konto, kan du ignorere denne mail.";
+                    await emailSender.SendAsync(user.Email!, subject, body, httpCtx.RequestAborted);
+                }
+                catch
+                {
+                    // Do not fail registration on email issues
+                }
                 return Results.Ok(new RegisterResult { Success = true, AuthResponse = resp });
             })
             .Accepts<RegisterRequest>("application/json")
@@ -190,6 +210,36 @@ namespace AuthService.Endpoints
             .Produces<AuthResponse>(StatusCodes.Status200OK, contentType: "application/json")
             .Produces(StatusCodes.Status400BadRequest);
 
+            group.MapGet("/confirm-email", async (string userId, string token, UserManager<ApplicationUser> userManager) =>
+            {
+                if (string.IsNullOrWhiteSpace(userId) || string.IsNullOrWhiteSpace(token))
+                    return Results.BadRequest("Missing userId or token");
+
+                var user = await userManager.FindByIdAsync(userId);
+                if (user is null)
+                    return Results.BadRequest("Invalid user");
+
+                var decodedToken = System.Net.WebUtility.UrlDecode(token);
+                var result = await userManager.ConfirmEmailAsync(user, decodedToken);
+                if (result.Succeeded)
+                {
+                    // Return a minimal confirmation page/text
+                    return Results.Text("Email confirmed. You can close this window.", "text/plain");
+                }
+
+                var errors = string.Join("; ", result.Errors.Select(e => e.Description));
+                return Results.BadRequest($"Failed to confirm email: {errors}");
+            })
+            .WithOpenApi(op =>
+            {
+                op.OperationId = "Auth_ConfirmEmail";
+                op.Summary = "Confirm user email";
+                op.Description = "Verifies the email confirmation token and marks the user's email as confirmed.";
+                return op;
+            })
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest);
+
             group.MapGet("/me", async (ClaimsPrincipal user, ApplicationDbContext db, IMemoryCache cache, IConfiguration config) =>
             {
                 if (!user.Identity?.IsAuthenticated ?? true) return Results.Unauthorized();
@@ -230,6 +280,13 @@ namespace AuthService.Endpoints
                 if (DateOnly.TryParse(birthDateClaim, out var bd)) birthDate = bd;
                 bool isOrg = bool.TryParse(isOrgClaim, out var io) && io;
 
+                // get IsEmailConfirmed from db
+                bool emailConfirmed = false;
+                if (!string.IsNullOrEmpty(userId))
+                {
+                    emailConfirmed = await db.Users.Where(u => u.Id == userId).Select(u => u.EmailConfirmed).FirstOrDefaultAsync();
+                }
+
                 var dto = new UserInformationDTO
                 {
                     Id = userId,
@@ -242,7 +299,8 @@ namespace AuthService.Endpoints
                     Rating = rating,
                     Gender = gender,
                     IsOrganization = isOrg,
-                    BirthDate = birthDate
+                    BirthDate = birthDate,
+                    IsEmailConfirmed = emailConfirmed
                 };
                 return Results.Ok(dto);
             })
