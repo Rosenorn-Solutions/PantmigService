@@ -85,6 +85,7 @@ public static class AuthTestServer
                 services.AddScoped<ICityResolver, CityResolver>();
                 services.AddScoped<IUsernameGenerator, UsernameGenerator>();
                 services.AddScoped<IAuthService, AuthServiceImpl>();
+                services.AddScoped<IEmailSender, SmtpEmailSender>();
 
                 services.AddEndpointsApiExplorer();
             })
