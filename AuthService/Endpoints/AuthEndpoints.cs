@@ -26,7 +26,6 @@ namespace AuthService.Endpoints
         {
             var group = app.MapGroup("/auth").WithTags("Auth");
 
-            // Quick availability checks for registration UX
             group.MapGet("/check-email", async (string email, UserManager<ApplicationUser> userManager, CancellationToken ct) =>
             {
                 if (string.IsNullOrWhiteSpace(email))
@@ -124,12 +123,12 @@ namespace AuthService.Endpoints
                     BirthDate = user.BirthDate
                 };
 
-                // Send email confirmation link
                 try
                 {
                     var token = await userManager.GenerateEmailConfirmationTokenAsync(user);
-                    var tokenEnc = System.Net.WebUtility.UrlEncode(token);
-                    var baseUrl = "https://auth.pantmig.dk"; // as requested
+                    var tokenBytes = System.Text.Encoding.UTF8.GetBytes(token);
+                    var tokenEnc = Microsoft.AspNetCore.WebUtilities.WebEncoders.Base64UrlEncode(tokenBytes);
+                    var baseUrl = "https://auth.pantmig.dk";
                     var confirmUrl = $"{baseUrl.TrimEnd('/')}/auth/confirm-email?userId={Uri.EscapeDataString(user.Id)}&token={tokenEnc}";
 
                     var subject = "Bekræft din e-mail til PantMig";
@@ -138,7 +137,6 @@ namespace AuthService.Endpoints
                 }
                 catch
                 {
-                    // Do not fail registration on email issues
                 }
                 return Results.Ok(new RegisterResult { Success = true, AuthResponse = resp });
             })
@@ -219,16 +217,23 @@ namespace AuthService.Endpoints
                 if (user is null)
                     return Results.BadRequest("Invalid user");
 
-                var decodedToken = System.Net.WebUtility.UrlDecode(token);
-                var result = await userManager.ConfirmEmailAsync(user, decodedToken);
-                if (result.Succeeded)
+                try
                 {
-                    // Return a minimal confirmation page/text
-                    return Results.Text("Email confirmed. You can close this window.", "text/plain");
-                }
+                    var tokenBytes = Microsoft.AspNetCore.WebUtilities.WebEncoders.Base64UrlDecode(token);
+                    var decodedToken = System.Text.Encoding.UTF8.GetString(tokenBytes);
+                    var result = await userManager.ConfirmEmailAsync(user, decodedToken);
+                    if (result.Succeeded)
+                    {
+                        return Results.Text("Email confirmed. You can close this window.", "text/plain");
+                    }
 
-                var errors = string.Join("; ", result.Errors.Select(e => e.Description));
-                return Results.BadRequest($"Failed to confirm email: {errors}");
+                    var errors = string.Join("; ", result.Errors.Select(e => e.Description));
+                    return Results.BadRequest($"Failed to confirm email: {errors}");
+                }
+                catch (Exception ex)
+                {
+                    return Results.BadRequest($"Invalid token format: {ex.Message}");
+                }
             })
             .WithOpenApi(op =>
             {
@@ -271,7 +276,6 @@ namespace AuthService.Endpoints
                                               .FirstOrDefaultAsync();
                 }
 
-                // Fetch gender and birthdate from claims if present
                 var genderClaim = user.FindFirst("gender")?.Value;
                 var isOrgClaim = user.FindFirst("isOrganization")?.Value;
                 var birthDateClaim = user.FindFirst("birthDate")?.Value;
@@ -280,7 +284,6 @@ namespace AuthService.Endpoints
                 if (DateOnly.TryParse(birthDateClaim, out var bd)) birthDate = bd;
                 bool isOrg = bool.TryParse(isOrgClaim, out var io) && io;
 
-                // get IsEmailConfirmed from db
                 bool emailConfirmed = false;
                 if (!string.IsNullOrEmpty(userId))
                 {
@@ -315,7 +318,6 @@ namespace AuthService.Endpoints
             .Produces<UserInformationDTO>(StatusCodes.Status200OK, contentType: "application/json")
             .Produces(StatusCodes.Status401Unauthorized);
 
-            // Public endpoint to get user info by id (for cross-service lookup)
             group.MapGet("/users/{id}", async (string id, ApplicationDbContext db, IMemoryCache cache, IConfiguration config) =>
             {
                 var user = await db.Users.Include(u => u.City).AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
@@ -352,7 +354,6 @@ namespace AuthService.Endpoints
             .Produces<UserInformationResult>(StatusCodes.Status200OK, contentType: "application/json")
             .Produces(StatusCodes.Status404NotFound);
 
-            // Batch lookup endpoint to resolve multiple users' ratings at once
             group.MapPost("/users/lookup", async (UsersLookupRequest req, ApplicationDbContext db, IMemoryCache cache, IConfiguration config) =>
             {
                 if (req?.Ids == null || req.Ids.Count == 0)
@@ -360,14 +361,12 @@ namespace AuthService.Endpoints
                     return Results.Ok(new UsersLookupResult { Success = true, Users = new List<UserRatingDTO>() });
                 }
 
-                // Sanitize: unique and non-empty ids
                 var ids = req.Ids.Where(id => !string.IsNullOrWhiteSpace(id)).Distinct().ToList();
                 if (ids.Count == 0)
                 {
                     return Results.Ok(new UsersLookupResult { Success = true, Users = new List<UserRatingDTO>() });
                 }
 
-                // Preload usernames for all requested ids
                 var nameMap = await db.Users.AsNoTracking()
                     .Where(u => ids.Contains(u.Id))
                     .Select(u => new { u.Id, u.UserName })

@@ -57,7 +57,6 @@ public class StatisticsService(PantmigDbContext db) : IStatisticsService
     {
         if (string.IsNullOrWhiteSpace(city)) return null;
 
-        // Resolve city by slug or name (case-insensitive contains on name, exact on slug)
         var slug = Utils.Helpers.SlugHelper.ToSlug(city);
 
         var cityRow = await _db.Cities
@@ -66,12 +65,9 @@ public class StatisticsService(PantmigDbContext db) : IStatisticsService
 
         if (cityRow is null)
         {
-            // If not existing yet, we still can aggregate with a name match by resolving on-the-fly via slug
-            // but to remain consistent, return null to indicate not found.
             return null;
         }
 
-        // Completed listings for this city
         var baseQuery = _db.RecycleListings
             .AsNoTracking()
             .Where(l => l.CityId == cityRow.Id && l.Status == ListingStatus.Completed);

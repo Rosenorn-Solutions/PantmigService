@@ -39,7 +39,7 @@ public static class StatisticsEndpoints
             var result = await stats.GetRecyclerStatisticsAsync(userId, ctx.RequestAborted);
             return Results.Ok(result);
         })
-        .RequireAuthorization() // any authenticated user can fetch their own recycler stats
+        .RequireAuthorization()
         .WithOpenApi(op =>
         {
             op.OperationId = "Statistics_Recycler";
@@ -50,7 +50,6 @@ public static class StatisticsEndpoints
         .Produces<RecyclerStatisticsResult>(StatusCodes.Status200OK, contentType: "application/json")
         .Produces(StatusCodes.Status401Unauthorized);
 
-        // Open endpoint: city-based statistics
         group.MapGet("/city", async ([FromQuery] string? city, IStatisticsService stats, HttpContext ctx) =>
         {
             if (string.IsNullOrWhiteSpace(city))
@@ -70,7 +69,6 @@ public static class StatisticsEndpoints
             op.OperationId = "Statistics_City";
             op.Summary = "Get city-based recycling statistics";
             op.Description = "Open endpoint. Supply city name (case-insensitive). Returns material breakdown and total approximate worth for completed listings in that city.";
-            // Describe query parameter
             op.Parameters =
             [
                 new Microsoft.OpenApi.Models.OpenApiParameter

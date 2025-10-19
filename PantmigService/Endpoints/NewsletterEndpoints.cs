@@ -30,7 +30,6 @@ namespace PantmigService.Endpoints
                 if (!IsValidEmail(email))
                     return Results.BadRequest(new SubscribeResponse(false, "Invalid email"));
 
-                // Idempotent insert if not exists
                 var exists = await db.NewsletterSubscriptions.AnyAsync(n => n.Email == email, ctx.RequestAborted);
                 if (!exists)
                 {
@@ -94,7 +93,6 @@ namespace PantmigService.Endpoints
                 if (!IsValidEmail(email))
                     return Results.BadRequest(new UnsubscribeResponse(false, "Invalid email"));
 
-                // Remove any entries for the email (idempotent)
                 var matches = await db.NewsletterSubscriptions
                     .Where(n => n.Email == email)
                     .ToListAsync(ctx.RequestAborted);
@@ -117,7 +115,6 @@ namespace PantmigService.Endpoints
                 return op;
             });
 
-            // One-click unsubscribe (GET) for email clients like Outlook
             group.MapGet("/unsubscribe", async ([FromQuery] string email, PantmigDbContext db, HttpContext ctx) =>
             {
                 if (string.IsNullOrWhiteSpace(email))
@@ -134,8 +131,6 @@ namespace PantmigService.Endpoints
                     db.NewsletterSubscriptions.RemoveRange(rows);
                     await db.SaveChangesAsync(ctx.RequestAborted);
                 }
-
-                // Small friendly confirmation
                 return Results.Text("You have been unsubscribed.", "text/plain");
             })
             .Produces(StatusCodes.Status200OK)

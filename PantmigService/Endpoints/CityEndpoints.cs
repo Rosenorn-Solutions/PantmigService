@@ -13,14 +13,12 @@ namespace PantmigService.Endpoints
         {
             var group = app.MapGroup("/cities").WithTags("Cities");
 
-            // Open endpoint to search cities by name or postal code (typeahead)
             group.MapGet("/search", async (string? q, PantmigDbContext db, int take = 15) =>
             {
                 if (string.IsNullOrWhiteSpace(q)) return Results.Ok(Array.Empty<CitySearchResult>());
                 q = q.Trim();
                 if (take is < 1 or > 50) take = 15;
 
-                // Find cities by postal startswith or name contains (case-insensitive)
                 var postalQuery = db.CityPostalCodes
                     .Where(cp => cp.PostalCode.StartsWith(q))
                     .Select(cp => cp.CityId);
@@ -37,13 +35,11 @@ namespace PantmigService.Endpoints
 
                 if (cityIds.Count == 0) return Results.Ok(Array.Empty<CitySearchResult>());
 
-                // Load names
                 var cities = await db.Cities
                     .Where(c => cityIds.Contains(c.Id))
                     .Select(c => new { c.Id, c.Name })
                     .ToListAsync();
 
-                // Load postal codes for these cities
                 var postals = await db.CityPostalCodes
                     .Where(cp => cityIds.Contains(cp.CityId))
                     .GroupBy(cp => cp.CityId)

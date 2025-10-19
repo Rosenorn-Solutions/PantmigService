@@ -25,7 +25,6 @@ namespace PantmigService
         {
             var builder = WebApplication.CreateBuilder(args);
 
-            // Only configure Serilog sinks in code, not in appsettings.json
             Log.Logger = new LoggerConfiguration()
                 .ReadFrom.Configuration(builder.Configuration)
                 .Enrich.FromLogContext()
@@ -41,15 +40,14 @@ namespace PantmigService
 
             builder.Host.UseSerilog();
 
-            // Increase body size limits to support multi-image uploads via multipart/form-data
-            const long MaxRequestBytes = 64L * 1024 * 1024; // 64 MB
+            const long MaxRequestBytes = 64L * 1024 * 1024;
             builder.WebHost.ConfigureKestrel(options =>
             {
                 options.Limits.MaxRequestBodySize = MaxRequestBytes;
             });
             builder.Services.Configure<FormOptions>(options =>
             {
-                options.MultipartBodyLengthLimit = MaxRequestBytes; // applies to form uploads
+                options.MultipartBodyLengthLimit = MaxRequestBytes;
             });
 
             builder.Services.AddAuthorizationBuilder()
@@ -63,7 +61,6 @@ namespace PantmigService
                     });
                 });
 
-            // CORS to allow front-end origins from configuration
             var allowedOrigins = builder.Configuration
                 .GetSection("Cors:AllowedOrigins")
                 .GetChildren()
@@ -74,7 +71,6 @@ namespace PantmigService
 
             if (allowedOrigins.Length == 0)
             {
-                //defaults for local dev if no allowedOrigins found.
                 allowedOrigins =
                 [
                     "http://localhost:8081",
@@ -95,7 +91,6 @@ namespace PantmigService
                 });
             });
 
-            // JWT Authentication
             var jwtSettings = builder.Configuration.GetSection("JwtSettings");
             var secretKey = jwtSettings["SecretKey"];
             var issuer = jwtSettings["Issuer"];
@@ -119,7 +114,6 @@ namespace PantmigService
                     ClockSkew = TimeSpan.Zero
                 };
 
-                // Allow SignalR to receive access token via query string for WebSockets
                 options.Events = new JwtBearerEvents
                 {
                     OnMessageReceived = context =>
@@ -135,7 +129,6 @@ namespace PantmigService
                 };
             });
 
-            // Swagger & API Explorer (OpenAPI specification)
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen(c =>
             {
@@ -169,11 +162,9 @@ namespace PantmigService
                 });
             });
 
-            // EF Core SQL Server
             builder.Services.AddDbContext<PantmigDbContext>(opt =>
                 opt.UseSqlServer(builder.Configuration.GetConnectionString("PantmigConnection")));
 
-            // App services
             builder.Services.AddScoped<IRecycleListingService, RecycleListingService>();
             builder.Services.AddScoped<ICityResolver, CityResolver>();
             builder.Services.AddScoped<IRecycleListingValidationService, RecycleListingValidationService>();
@@ -184,17 +175,14 @@ namespace PantmigService
             builder.Services.AddScoped<INotificationService, NotificationService>();
             builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
 
-            // Antivirus scanner (ClamAV)
             var clamSection = builder.Configuration.GetSection("ClamAV");
             var clamOptions = clamSection.Get<ClamAvOptions>() ?? new ClamAvOptions();
             builder.Services.AddSingleton<IAntivirusScanner>(_ => new ClamAvAntivirusScanner(clamOptions));
 
-            // Real-time
             builder.Services.AddSignalR();
 
             var app = builder.Build();
 
-            // Optional CSV seed of postal codes at startup
             using (var scope = app.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<PantmigDbContext>();
@@ -209,7 +197,6 @@ namespace PantmigService
                 }
             }
 
-            // Configure the HTTP request pipeline.
             if (app.Environment.IsDevelopment())
             {
                 app.UseSwagger();
@@ -218,13 +205,11 @@ namespace PantmigService
 
             app.UseHttpsRedirection();
 
-            // Enable CORS early to handle preflight requests
             app.UseCors("FrontendCors");
 
             app.UseAuthentication();
             app.UseAuthorization();
 
-            // Endpoints
             app.MapRecycleListingEndpoints();
             app.MapCityEndpoints();
             app.MapStatisticsEndpoints();

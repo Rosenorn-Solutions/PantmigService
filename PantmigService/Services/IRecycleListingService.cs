@@ -2,7 +2,6 @@ using PantmigService.Entities;
 
 namespace PantmigService.Services
 {
-    // Lightweight DTO for applicants list - id and appliedAt
     public record ApplicantInfo(string Id, DateTime AppliedAt);
 
     public interface IRecycleListingService
@@ -17,7 +16,6 @@ namespace PantmigService.Services
         Task<bool> AcceptPickupAsync(int id, string donatorUserId, string recyclerUserId, CancellationToken ct = default);
         Task<IReadOnlyList<ApplicantInfo>?> GetApplicantsAsync(int id, string donatorUserId, CancellationToken ct = default);
         Task<bool> StartChatAsync(int id, string chatSessionId, CancellationToken ct = default);
-        // Pickup is now confirmed by the donator (owner) and completes the listing
         Task<bool> ConfirmPickupAsync(int id, string donatorUserId, CancellationToken ct = default);
         Task<bool> SubmitReceiptUploadAsync(int id, string recyclerUserId, string fileName, string contentType, byte[] data, decimal reportedAmount, CancellationToken ct = default);
         Task<bool> SetMeetingPointAsync(int id, string donatorUserId, decimal latitude, decimal longitude, CancellationToken ct = default);

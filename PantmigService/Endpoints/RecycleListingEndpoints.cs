@@ -30,7 +30,6 @@ namespace PantmigService.Endpoints
             var group = app.MapGroup("/listings")
                 .WithTags("Recycle Listings");
 
-            // Active listings
             group.MapGet("/", async (IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx) =>
             {
                 var logger = lf.CreateLogger("Listings");
@@ -55,7 +54,6 @@ namespace PantmigService.Endpoints
                 .RequireAuthorization()
                 .Produces<IEnumerable<RecycleListingResponse>>(StatusCodes.Status200OK, contentType: "application/json");
 
-            // My applications (recycler)
             group.MapGet("/my-applications", async (ClaimsPrincipal user, IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx) =>
             {
                 var logger = lf.CreateLogger("Listings");
@@ -87,7 +85,6 @@ namespace PantmigService.Endpoints
             .Produces<IEnumerable<RecycleListingResponse>>(StatusCodes.Status200OK, contentType: "application/json")
             .Produces(StatusCodes.Status401Unauthorized);
 
-            // My listings (donator)
             group.MapGet("/my-listings", async (ClaimsPrincipal user, IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx) =>
             {
                 var logger = lf.CreateLogger("Listings");
@@ -150,7 +147,6 @@ namespace PantmigService.Endpoints
             .Produces<RecycleListingResponse>(StatusCodes.Status200OK, contentType: "application/json")
             .Produces(StatusCodes.Status404NotFound);
 
-            // Donator creates listing (JSON or multipart with images[])
             group.MapPost("/", async (HttpRequest httpRequest, ClaimsPrincipal user, IRecycleListingService svc, IRecycleListingValidationService validator, ICreateListingRequestParser parser, ICityResolver cityResolver, ILoggerFactory lf, HttpContext ctx) =>
             {
                 var logger = lf.CreateLogger("Listings");
@@ -219,7 +215,6 @@ namespace PantmigService.Endpoints
                 op.Summary = "Create a new listing";
                 op.Description = "Creates a new recycle listing with structured item contents. Supports either JSON body (application/json) or multipart/form-data (fields: title, description, city/location, availableFrom, availableTo, optional pickupTimeFrom/pickupTimeTo, items as JSON string, images as image/*). Requires a verified Donator.";
 
-                // Ensure requestBody with both content types
                 op.RequestBody = new OpenApiRequestBody
                 {
                     Required = true,
@@ -275,7 +270,6 @@ namespace PantmigService.Endpoints
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized);
 
-            // Recycler requests pickup
             group.MapPost("/pickup/request", async (PickupRequest req, ClaimsPrincipal user, IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx) =>
             {
                 var logger = lf.CreateLogger("Listings");
@@ -311,7 +305,6 @@ namespace PantmigService.Endpoints
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized);
 
-            // Donator views applicants list
             group.MapGet("/{id:int}/applicants", async (int id, ClaimsPrincipal user, IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx) =>
             {
                 var logger = lf.CreateLogger("Listings");
@@ -347,7 +340,6 @@ namespace PantmigService.Endpoints
             .Produces(StatusCodes.Status403Forbidden)
             .Produces(StatusCodes.Status400BadRequest);
 
-            // Donator accepts recycler
             group.MapPost("/pickup/accept", async (AcceptRequest req, ClaimsPrincipal user, IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx) =>
             {
                 var logger = lf.CreateLogger("Listings");
@@ -383,7 +375,6 @@ namespace PantmigService.Endpoints
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized);
 
-            // Start direct chat between donator and assigned recycler (restricted to those two users)
             group.MapPost("/chat/start", async (ChatStartRequest req, ClaimsPrincipal user, IRecycleListingService svc, IChatValidationService chatValidator, ILoggerFactory lf, HttpContext ctx) =>
             {
                 var logger = lf.CreateLogger("Listings");
@@ -438,7 +429,6 @@ namespace PantmigService.Endpoints
             .Produces(StatusCodes.Status403Forbidden)
             .Produces(StatusCodes.Status404NotFound);
 
-            // Donator sets meeting point (requires chat started)
             group.MapPost("/meeting/set", async (MeetingPointRequest req, ClaimsPrincipal user, IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx) =>
             {
                 var logger = lf.CreateLogger("Listings");
@@ -474,7 +464,6 @@ namespace PantmigService.Endpoints
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized);
 
-            // Donator confirms pickup (this now completes the listing)
             group.MapPost("/pickup/confirm", async (PickupConfirmRequest req, ClaimsPrincipal user, IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx) =>
             {
                 var logger = lf.CreateLogger("Listings");
@@ -510,7 +499,6 @@ namespace PantmigService.Endpoints
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized);
 
-            // Recycler uploads receipt image (binary upload)
             group.MapPost("/receipt/upload", async ([FromForm] int listingId, [FromForm] decimal reportedAmount, [FromForm] IFormFile file, ClaimsPrincipal user, IRecycleListingService svc, IFileValidationService fileValidator, IAntivirusScanner av, ILoggerFactory lf, HttpContext ctx) =>
             {
                 var logger = lf.CreateLogger("Listings");
@@ -572,7 +560,6 @@ namespace PantmigService.Endpoints
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized);
 
-            // Donator cancels listing
             group.MapPost("/cancel", async (CancelRequest req, ClaimsPrincipal user, IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx) =>
             {
                 var logger = lf.CreateLogger("Listings");

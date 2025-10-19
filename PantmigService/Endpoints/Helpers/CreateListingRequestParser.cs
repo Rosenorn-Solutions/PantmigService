@@ -9,7 +9,7 @@ namespace PantmigService.Endpoints.Helpers;
 public class CreateListingRequestParser : ICreateListingRequestParser
 {
     private const int MaxImages = 6;
-    private const long MaxImageBytes = 5 * 1024 * 1024; // 5 MB
+    private const long MaxImageBytes = 5 * 1024 * 1024;
 
     private readonly IRecycleListingValidationService _validator;
     private readonly IAntivirusScanner _antivirus;
