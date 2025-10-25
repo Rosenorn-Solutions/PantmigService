@@ -1,14 +1,9 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging.Abstractions;
 using PantmigService.Data;
 using PantmigService.Entities;
 using PantmigService.Services;
-using Xunit;
-using Microsoft.Extensions.Logging.Abstractions;
-using System.Collections.Generic;
-using Microsoft.Extensions.Caching.Memory;
 
 namespace PantMigTesting.Services
 {
@@ -125,7 +120,7 @@ namespace PantMigTesting.Services
             var older = await svc.CreateAsync(NewListing(createdAt: DateTime.UtcNow.AddHours(-3)));
             var newest = await svc.CreateAsync(NewListing(createdAt: DateTime.UtcNow));
             var pending = await svc.CreateAsync(NewListing(status: ListingStatus.PendingAcceptance, createdAt: DateTime.UtcNow.AddHours(-2)));
-            
+
             //Don't show
             await svc.CreateAsync(NewListing(isActive: false));
             await svc.CreateAsync(NewListing(status: ListingStatus.Completed));

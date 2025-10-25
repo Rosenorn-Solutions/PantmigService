@@ -1,16 +1,11 @@
-using System.Security.Claims;
 using AuthService.Data;
 using AuthService.Entities;
 using AuthService.Models;
 using AuthService.Services;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.OpenApi;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
-using System.Text;
-using System.Globalization;
-using System.Security.Cryptography;
+using System.Security.Claims;
 
 namespace AuthService.Endpoints
 {
@@ -64,10 +59,10 @@ namespace AuthService.Endpoints
             .Produces<AvailabilityResult>(StatusCodes.Status200OK, contentType: "application/json")
             .Produces(StatusCodes.Status400BadRequest);
 
-            group.MapPost("/register", async (RegisterRequest req, UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager, ITokenService tokenService, 
-                ICityResolver cityResolver, 
-                IConfiguration config, 
-                IUsernameGenerator usernameGenerator, 
+            group.MapPost("/register", async (RegisterRequest req, UserManager<ApplicationUser> userManager, RoleManager<IdentityRole> roleManager, ITokenService tokenService,
+                ICityResolver cityResolver,
+                IConfiguration config,
+                IUsernameGenerator usernameGenerator,
                 IAuthService authService,
                 IEmailSender emailSender,
                 LinkGenerator links,

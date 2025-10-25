@@ -1,4 +1,3 @@
-using System.Linq;
 using nClam;
 
 namespace PantmigService.Security;

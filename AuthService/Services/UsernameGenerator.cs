@@ -1,8 +1,8 @@
+using AuthService.Entities;
+using Microsoft.AspNetCore.Identity;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
-using AuthService.Entities;
-using Microsoft.AspNetCore.Identity;
 
 namespace AuthService.Services
 {

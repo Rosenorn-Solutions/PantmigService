@@ -1,4 +1,5 @@
 using PantmigService.Entities;
+using PantmigService.Utils;
 
 namespace PantmigService.Services
 {
@@ -9,6 +10,7 @@ namespace PantmigService.Services
         Task<RecycleListing> CreateAsync(RecycleListing listing, CancellationToken ct = default);
         Task<RecycleListing?> GetByIdAsync(int id, CancellationToken ct = default);
         Task<IEnumerable<RecycleListing>> GetActiveAsync(CancellationToken ct = default);
+        Task<PagedResult<RecycleListing>> GetActivePagedAsync(int page, int pageSize, CancellationToken ct = default);
         Task<IEnumerable<RecycleListing>> GetByUserAsync(string userId, CancellationToken ct = default);
         Task<IEnumerable<RecycleListing>> GetAppliedByRecyclerAsync(string recyclerUserId, CancellationToken ct = default);
 
@@ -21,5 +23,6 @@ namespace PantmigService.Services
         Task<bool> SetMeetingPointAsync(int id, string donatorUserId, decimal latitude, decimal longitude, CancellationToken ct = default);
         Task<bool> CancelAsync(int id, string donatorUserId, CancellationToken ct = default);
         Task<IEnumerable<RecycleListing>> SearchAsync(int cityId, bool onlyActive = true, CancellationToken ct = default);
+        Task<PagedResult<RecycleListing>> SearchAsync(int cityId, int page, int pageSize, bool onlyActive = true, CancellationToken ct = default);
     }
 }

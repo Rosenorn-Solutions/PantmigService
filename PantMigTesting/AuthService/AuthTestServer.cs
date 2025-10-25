@@ -1,10 +1,8 @@
-using System.Text;
-using System.Text.Json;
 using AuthService.Data;
-using AuthService.Entities;
 using AuthService.Endpoints;
+using AuthService.Entities;
 using AuthService.Services;
-using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
@@ -13,7 +11,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
+using System.Text;
 
 namespace PantMigTesting.AuthServiceTests;
 

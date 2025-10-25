@@ -1,10 +1,10 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
+using PantmigService.Data;
 using PantmigService.Entities;
 using PantmigService.Services;
-using PantmigService.Data;
-using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 
 namespace PantmigService.Hubs
 {
@@ -33,11 +33,7 @@ namespace PantmigService.Hubs
         {
             var userId = GetUserIdOrThrow();
 
-            var listing = await _listings.GetByIdAsync(listingId);
-            if (listing is null)
-            {
-                throw new HubException("Listing not found");
-            }
+            var listing = await _listings.GetByIdAsync(listingId) ?? throw new HubException("Listing not found");
 
             // Listing must be in or past Accepted to chat
             var validStatus = listing.Status == ListingStatus.Accepted

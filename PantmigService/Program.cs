@@ -1,21 +1,17 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.OpenApi.Models;
-using Microsoft.IdentityModel.Tokens;
-using System.Security.Claims;
-using System.Text;
-using PantmigService.Entities;
-using PantmigService.Endpoints;
-using PantmigService.Services;
-using PantmigService.Data;
-using Microsoft.EntityFrameworkCore;
-using Serilog;
-using PantmigService.Hubs;
-using PantmigService.Seed;
-using System.Linq;
-using PantmigService.Security;
-using PantmigService.Endpoints.Helpers;
 using Microsoft.AspNetCore.Http.Features;
-using Microsoft.AspNetCore.Server.Kestrel.Core;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
+using PantmigService.Data;
+using PantmigService.Endpoints;
+using PantmigService.Endpoints.Helpers;
+using PantmigService.Hubs;
+using PantmigService.Security;
+using PantmigService.Seed;
+using PantmigService.Services;
+using Serilog;
+using System.Text;
 
 namespace PantmigService
 {
@@ -118,7 +114,7 @@ namespace PantmigService
                 {
                     OnMessageReceived = context =>
                     {
-                        var accessToken = context.Request.Query["access_token"];                
+                        var accessToken = context.Request.Query["access_token"];
                         var path = context.HttpContext.Request.Path;
                         if (!string.IsNullOrEmpty(accessToken) && (path.StartsWithSegments("/hubs/chat") || path.StartsWithSegments("/hubs/notifications")))
                         {
@@ -183,7 +179,7 @@ namespace PantmigService
 
             // In-memory caching for read-heavy endpoints
             builder.Services.AddMemoryCache();
-            
+
             var app = builder.Build();
 
             using (var scope = app.Services.CreateScope())

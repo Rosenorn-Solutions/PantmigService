@@ -1,9 +1,8 @@
-using System.Globalization;
-using System.Text;
+using Microsoft.EntityFrameworkCore;
 using PantmigService.Data;
 using PantmigService.Entities;
-using Microsoft.EntityFrameworkCore;
 using PantmigService.Utils.Helpers;
+using System.Text;
 
 namespace PantmigService.Seed
 {

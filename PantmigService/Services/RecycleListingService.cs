@@ -1,8 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using PantmigService.Data;
 using PantmigService.Entities;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Caching.Memory;
+using PantmigService.Utils; // for PagedResult
 
 namespace PantmigService.Services
 {
@@ -16,10 +16,14 @@ namespace PantmigService.Services
         private static readonly TimeSpan ListingsCacheTtl = TimeSpan.FromSeconds(30);
         private static readonly TimeSpan ListingCacheTtl = TimeSpan.FromMinutes(5);
 
+        private const int MaxPageSize = 100;
+
         private string ActiveListingsCacheKey(int cityId) => $"listings:active:city:{cityId}";
+        private string ActiveAllCacheKey(int page, int pageSize) => $"listings:active:all:p{page}:s{pageSize}";
         private string ListingCacheKey(int id) => $"listing:{id}";
         private string UserListingsCacheKey(string userId) => $"listings:user:{userId}";
         private string SearchCacheKey(int cityId, bool onlyActive) => $"listings:search:city:{cityId}:onlyActive:{onlyActive}";
+        private string SearchPageCacheKey(int cityId, int page, int pageSize, bool onlyActive) => $"listings:search:paged:city:{cityId}:page:{page}:size:{pageSize}:onlyActive:{onlyActive}";
 
         public async Task<RecycleListing> CreateAsync(RecycleListing listing, CancellationToken ct = default)
         {
@@ -73,6 +77,36 @@ namespace PantmigService.Services
             _logger.LogDebug("Fetched {Count} active listings", list.Count);
             _cache.Set(key, list, ListingsCacheTtl);
             return list;
+        }
+
+        public async Task<PagedResult<RecycleListing>> GetActivePagedAsync(int page, int pageSize, CancellationToken ct = default)
+        {
+            if (page <= 0) page = 1;
+            if (pageSize <= 0) pageSize = 20;
+            if (pageSize > MaxPageSize) pageSize = MaxPageSize;
+
+            var key = ActiveAllCacheKey(page, pageSize);
+            if (_cache.TryGetValue<PagedResult<RecycleListing>>(key, out var cached) && cached is not null)
+            {
+                _logger.LogDebug("Returning paged active listings from cache p{Page} s{Size}", page, pageSize);
+                return cached;
+            }
+
+            var baseQuery = _db.RecycleListings.AsNoTracking()
+                .Where(x => x.IsActive && (x.Status == ListingStatus.Created || x.Status == ListingStatus.PendingAcceptance));
+
+            var total = await baseQuery.CountAsync(ct);
+            var items = await baseQuery
+                .OrderByDescending(x => x.CreatedAt)
+                .Include(l => l.Items)
+                .Include(l => l.Images)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync(ct);
+
+            var result = new PagedResult<RecycleListing>(items, total, page, pageSize);
+            _cache.Set(key, result, ListingsCacheTtl);
+            return result;
         }
 
         public async Task<IEnumerable<RecycleListing>> GetByUserAsync(string userId, CancellationToken ct = default)
@@ -259,7 +293,7 @@ namespace PantmigService.Services
         public async Task<bool> SetMeetingPointAsync(int id, string donatorUserId, decimal latitude, decimal longitude, CancellationToken ct = default)
         {
             _logger.LogDebug("Setting meeting point for listing {ListingId} by donator {Donator} to ({Lat},{Lon})", id, donatorUserId, latitude, longitude);
-            if (latitude is < -90 or >90 || longitude is < -180 or >180)
+            if (latitude is < -90 or > 90 || longitude is < -180 or > 180)
             {
                 _logger.LogWarning("SetMeetingPoint failed: invalid coordinates for listing {ListingId}", id);
                 return false;
@@ -288,8 +322,8 @@ namespace PantmigService.Services
                 _logger.LogWarning("SetMeetingPoint failed: invalid status {Status} for listing {ListingId}", listing.Status, id);
                 return false;
             }
-            listing.MeetingLatitude = decimal.Round(latitude,6);
-            listing.MeetingLongitude = decimal.Round(longitude,6);
+            listing.MeetingLatitude = decimal.Round(latitude, 6);
+            listing.MeetingLongitude = decimal.Round(longitude, 6);
             listing.MeetingSetAt = DateTime.UtcNow;
             await _db.SaveChangesAsync(ct);
 
@@ -429,7 +463,7 @@ namespace PantmigService.Services
             var query = _db.RecycleListings.AsNoTracking();
 
             query = query.Where(l => l.CityId == cityId);
-            
+
             if (onlyActive)
             {
                 query = query.Where(l => l.IsActive && (l.Status == ListingStatus.Created || l.Status == ListingStatus.PendingAcceptance));
@@ -444,6 +478,41 @@ namespace PantmigService.Services
             _logger.LogDebug("Search returned {Count} listings", list.Count);
             _cache.Set(key, list, ListingsCacheTtl);
             return list;
+        }
+
+        // New: paginated search
+        public async Task<PagedResult<RecycleListing>> SearchAsync(int cityId, int page, int pageSize, bool onlyActive = true, CancellationToken ct = default)
+        {
+            if (page <= 0) page = 1;
+            if (pageSize <= 0) pageSize = 20;
+            if (pageSize > MaxPageSize) pageSize = MaxPageSize;
+
+            var key = SearchPageCacheKey(cityId, page, pageSize, onlyActive);
+            if (_cache.TryGetValue<PagedResult<RecycleListing>>(key, out var cached) && cached is not null)
+            {
+                _logger.LogDebug("Returning paged search from cache for city {CityId} page {Page} size {Size}", cityId, page, pageSize);
+                return cached;
+            }
+
+            _logger.LogDebug("Paged search listings city={CityId}, page={Page}, size={Size}, onlyActive={OnlyActive}", cityId, page, pageSize, onlyActive);
+            var baseQuery = _db.RecycleListings.AsNoTracking().Where(l => l.CityId == cityId);
+            if (onlyActive)
+            {
+                baseQuery = baseQuery.Where(l => l.IsActive && (l.Status == ListingStatus.Created || l.Status == ListingStatus.PendingAcceptance));
+            }
+
+            var total = await baseQuery.CountAsync(ct);
+            var items = await baseQuery
+                .OrderByDescending(l => l.CreatedAt)
+                .Include(l => l.Items)
+                .Include(l => l.Images)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToListAsync(ct);
+
+            var result = new PagedResult<RecycleListing>(items, total, page, pageSize);
+            _cache.Set(key, result, ListingsCacheTtl);
+            return result;
         }
     }
 }

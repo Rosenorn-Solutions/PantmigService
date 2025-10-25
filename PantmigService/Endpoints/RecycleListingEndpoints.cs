@@ -1,16 +1,12 @@
-using System.Security.Claims;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.OpenApi;
-using Microsoft.OpenApi.Models;
-using PantmigService.Entities;
-using PantmigService.Services;
-using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Antiforgery;
-using PantmigService.Security;
-using PantmigService.Endpoints;
-using PantmigService.Utils.Extensions;
+using Microsoft.OpenApi.Models;
 using PantmigService.Endpoints.Helpers;
+using PantmigService.Entities;
+using PantmigService.Security;
+using PantmigService.Services;
+using PantmigService.Utils; // added for PagedResult
+using PantmigService.Utils.Extensions;
+using System.Security.Claims;
 
 namespace PantmigService.Endpoints
 {
@@ -25,19 +21,27 @@ namespace PantmigService.Endpoints
         public record MeetingPointRequest(int ListingId, decimal Latitude, decimal Longitude);
         public record CancelRequest(int ListingId);
         public record SearchRequest(int CityId, bool OnlyActive = true);
+        public record PagedSearchRequest<T>(int CityId, int Page = 1, int PageSize = 20, bool OnlyActive = true);
 
         public static IEndpointRouteBuilder MapRecycleListingEndpoints(this IEndpointRouteBuilder app)
         {
             var group = app.MapGroup("/listings")
                 .WithTags("Recycle Listings");
 
-            group.MapGet("/", async (IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx) =>
+            // Updated: GET / with pagination via query
+            group.MapGet("/", async ([FromQuery] int? page, [FromQuery] int? pageSize, IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx) =>
             {
                 var logger = lf.CreateLogger("Listings");
                 try
                 {
-                    var data = await svc.GetActiveAsync(ctx.RequestAborted);
-                    return Results.Ok(data.ToResponse());
+                    var p = page.GetValueOrDefault(1);
+                    var ps = pageSize.GetValueOrDefault(20);
+                    if (p <= 0) p = 1;
+                    if (ps <= 0) ps = 20;
+                    if (ps > 100) ps = 100;
+                    var data = await svc.GetActivePagedAsync(p, ps, ctx.RequestAborted);
+                    var dto = data.Map(l => l.ToResponse());
+                    return Results.Ok(dto);
                 }
                 catch (Exception ex)
                 {
@@ -48,26 +52,35 @@ namespace PantmigService.Endpoints
             .WithOpenApi(op =>
             {
                 op.OperationId = "Listings_GetActive";
-                op.Summary = "Get active recycle listings";
-                op.Description = "Returns all listings that are currently active and available.";
+                op.Summary = "Get active recycle listings (paged)";
+                op.Description = "Returns active listings, paginated via page and pageSize query params. Defaults: page=1, pageSize=20 (max100).";
+                op.Parameters =
+                [
+                    new OpenApiParameter { Name = "page", In = ParameterLocation.Query, Required = false, Description = "Page number (1-based)", Schema = new OpenApiSchema { Type = "integer", Default = new Microsoft.OpenApi.Any.OpenApiInteger(1) } },
+                    new OpenApiParameter { Name = "pageSize", In = ParameterLocation.Query, Required = false, Description = "Page size (max100)", Schema = new OpenApiSchema { Type = "integer", Default = new Microsoft.OpenApi.Any.OpenApiInteger(20) } }
+                ];
                 return op;
             })
             .RequireAuthorization()
-            .Produces<IEnumerable<RecycleListingResponse>>(StatusCodes.Status200OK, contentType: "application/json");
+            .Produces<PagedResult<RecycleListingResponse>>(StatusCodes.Status200OK, contentType: "application/json");
 
-            // New: generic search endpoint using SearchRequest
-            group.MapPost("/search", async (SearchRequest req, IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx) =>
+            // New: generic search endpoint using PagedSearchRequest
+            group.MapPost("/search", async (PagedSearchRequest<object> req, IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx) =>
             {
                 var logger = lf.CreateLogger("Listings");
                 try
                 {
-                    if (req.CityId <=0)
+                    if (req.CityId <= 0)
                     {
                         return Results.Problem(title: "Invalid search", detail: "cityId must be a positive integer.", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
                     }
 
-                    var items = await svc.SearchAsync(req.CityId, req.OnlyActive, ctx.RequestAborted);
-                    return Results.Ok(items.ToResponse());
+                    var pageVal = req.Page <= 0 ? 1 : req.Page;
+                    var pageSizeVal = req.PageSize <= 0 ? 20 : Math.Min(req.PageSize, 100);
+
+                    var result = await svc.SearchAsync(req.CityId, pageVal, pageSizeVal, req.OnlyActive, ctx.RequestAborted);
+                    var mapped = result.Map(l => l.ToResponse());
+                    return Results.Ok(mapped);
                 }
                 catch (Exception ex)
                 {
@@ -76,12 +89,12 @@ namespace PantmigService.Endpoints
                 }
             })
             .RequireAuthorization()
-            .Accepts<SearchRequest>("application/json")
+            .Accepts<PagedSearchRequest<object>>("application/json")
             .WithOpenApi(op =>
             {
                 op.OperationId = "Listings_Search";
                 op.Summary = "Search listings";
-                op.Description = "Search for listings. Currently supports filtering by cityId and an optional onlyActive flag. This payload can be extended later with more filters.";
+                op.Description = "Search for listings with pagination. Filters: cityId (required), onlyActive (optional).";
                 op.RequestBody = new OpenApiRequestBody
                 {
                     Required = true,
@@ -92,11 +105,13 @@ namespace PantmigService.Endpoints
                             Schema = new OpenApiSchema
                             {
                                 Type = "object",
-                                Required = { nameof(SearchRequest.CityId) },
+                                Required = { nameof(PagedSearchRequest<object>.CityId) },
                                 Properties =
                                 {
-                                    [nameof(SearchRequest.CityId)] = new OpenApiSchema { Type = "integer", Format = "int32", Description = "City identifier" },
-                                    [nameof(SearchRequest.OnlyActive)] = new OpenApiSchema { Type = "boolean", Description = "If true, returns only active listings in Created or PendingAcceptance states.", Default = new Microsoft.OpenApi.Any.OpenApiBoolean(true) }
+                                    [nameof(PagedSearchRequest<object>.CityId)] = new OpenApiSchema { Type = "integer", Format = "int32", Description = "City identifier" },
+                                    [nameof(PagedSearchRequest<object>.OnlyActive)] = new OpenApiSchema { Type = "boolean", Description = "If true, returns only active listings in Created or PendingAcceptance states.", Default = new Microsoft.OpenApi.Any.OpenApiBoolean(true) },
+                                    [nameof(PagedSearchRequest<object>.Page)] = new OpenApiSchema { Type = "integer", Format = "int32", Description = "Page number (1-based)", Default = new Microsoft.OpenApi.Any.OpenApiInteger(1) },
+                                    [nameof(PagedSearchRequest<object>.PageSize)] = new OpenApiSchema { Type = "integer", Format = "int32", Description = "Page size (max100)", Default = new Microsoft.OpenApi.Any.OpenApiInteger(20) }
                                 }
                             }
                         }
@@ -104,7 +119,7 @@ namespace PantmigService.Endpoints
                 };
                 return op;
             })
-            .Produces<IEnumerable<RecycleListingResponse>>(StatusCodes.Status200OK, contentType: "application/json")
+            .Produces<PagedResult<RecycleListingResponse>>(StatusCodes.Status200OK, contentType: "application/json")
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized);
 
@@ -319,7 +334,7 @@ namespace PantmigService.Endpoints
                 };
                 return op;
             })
-            .WithMetadata(new RequestSizeLimitAttribute(64L *1024 *1024))
+            .WithMetadata(new RequestSizeLimitAttribute(64L * 1024 * 1024))
             .Produces<RecycleListingResponse>(StatusCodes.Status201Created, contentType: "application/json")
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized);
@@ -569,7 +584,7 @@ namespace PantmigService.Endpoints
 
                     await using var ms = new MemoryStream();
                     await file.CopyToAsync(ms, ctx.RequestAborted);
-                    ms.Position =0;
+                    ms.Position = 0;
 
                     var scan = await av.ScanAsync(ms, file.FileName, ctx.RequestAborted);
                     if (scan.Status == AntivirusScanStatus.Infected)
@@ -609,7 +624,7 @@ namespace PantmigService.Endpoints
                 op.Description = "Recycler uploads the receipt image as multipart/form-data with fields: listingId, reportedAmount, file. This does not affect listing status and is available even after completion.";
                 return op;
             })
-            .WithMetadata(new RequestSizeLimitAttribute(64L *1024 *1024))
+            .WithMetadata(new RequestSizeLimitAttribute(64L * 1024 * 1024))
             .Produces(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized);
@@ -668,7 +683,7 @@ namespace PantmigService.Endpoints
                         return Results.Forbid();
                     }
 
-                    if (item.ReceiptImageBytes is null || item.ReceiptImageBytes.Length ==0)
+                    if (item.ReceiptImageBytes is null || item.ReceiptImageBytes.Length == 0)
                     {
                         return Results.NotFound();
                     }

@@ -1,7 +1,7 @@
-using Microsoft.EntityFrameworkCore;
 using AuthService.Data;
 using AuthService.Entities;
 using AuthService.Utils;
+using Microsoft.EntityFrameworkCore;
 
 namespace AuthService.Services
 {

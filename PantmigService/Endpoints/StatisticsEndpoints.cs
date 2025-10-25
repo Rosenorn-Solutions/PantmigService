@@ -1,8 +1,7 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.OpenApi.Models;
 using PantmigService.Services;
 using PantmigService.Utils.Extensions;
+using System.Security.Claims;
 
 namespace PantmigService.Endpoints;
 

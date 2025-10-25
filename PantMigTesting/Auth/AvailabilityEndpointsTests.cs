@@ -1,8 +1,6 @@
-using System.Net;
-using System.Net.Http.Json;
 using AuthService.Data;
-using AuthService.Entities;
 using AuthService.Endpoints;
+using AuthService.Entities;
 using AuthService.Models;
 using AuthService.Services;
 using Microsoft.AspNetCore.Builder;
@@ -12,6 +10,8 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using System.Net;
+using System.Net.Http.Json;
 
 namespace PantMigTesting.Auth;
 
