@@ -31,7 +31,7 @@ public class StatisticsServiceTests
             CreatedByUserId = "donor-1",
             Status = ListingStatus.Completed,
             AssignedRecyclerUserId = "recycler-1",
-            Items = [ new() { MaterialType = RecycleMaterialType.Can, Quantity = 10 } ],
+            Items = [new() { MaterialType = RecycleMaterialType.Can, Quantity = 10 }],
             ReportedAmount = 20m,
             IsActive = false
         };
@@ -42,7 +42,7 @@ public class StatisticsServiceTests
             CityId = 1,
             CreatedByUserId = "donor-1",
             Status = ListingStatus.Created,
-            Items = [ new() { MaterialType = RecycleMaterialType.PlasticBottle, Quantity = 5 } ],
+            Items = [new() { MaterialType = RecycleMaterialType.PlasticBottle, Quantity = 5 }],
             IsActive = true
         };
         var l3 = new RecycleListing
@@ -53,7 +53,7 @@ public class StatisticsServiceTests
             CreatedByUserId = "donor-2",
             Status = ListingStatus.Completed,
             AssignedRecyclerUserId = "recycler-1",
-            Items = [ new() { MaterialType = RecycleMaterialType.GlassBottle, Quantity = 4 } ],
+            Items = [new() { MaterialType = RecycleMaterialType.GlassBottle, Quantity = 4 }],
             ReportedAmount = 5m,
             IsActive = false
         };
@@ -66,7 +66,7 @@ public class StatisticsServiceTests
             CreatedByUserId = "donor-3",
             Status = ListingStatus.Completed,
             AssignedRecyclerUserId = "recycler-2",
-            Items = [ new() { MaterialType = RecycleMaterialType.PlasticBottle, Quantity = 6 } ],
+            Items = [new() { MaterialType = RecycleMaterialType.PlasticBottle, Quantity = 6 }],
             ReportedAmount = 12m,
             IsActive = false
         };

@@ -1,19 +1,16 @@
 using AuthService.Data;
+using AuthService.Endpoints;
 using AuthService.Entities;
+using AuthService.Models;
+using AuthService.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
-using System.Text;
 using Serilog;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using AuthService.Models;
-using System.Security.Cryptography;
-using AuthService.Endpoints;
-using AuthService.Services;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -72,7 +69,7 @@ builder.Services.AddAuthentication(options =>
         ValidIssuer = issuer,
         ValidAudience = audience,
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey!)),
-        ClockSkew = TimeSpan.Zero 
+        ClockSkew = TimeSpan.Zero
     };
 });
 

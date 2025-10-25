@@ -1,17 +1,12 @@
-using System.Security.Claims;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.OpenApi;
-using Microsoft.OpenApi.Models;
-using PantmigService.Entities;
-using PantmigService.Services;
-using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Antiforgery;
-using PantmigService.Security;
-using PantmigService.Endpoints;
-using PantmigService.Utils.Extensions;
+using Microsoft.OpenApi.Models;
 using PantmigService.Endpoints.Helpers;
+using PantmigService.Entities;
+using PantmigService.Security;
+using PantmigService.Services;
 using PantmigService.Utils; // added for PagedResult
+using PantmigService.Utils.Extensions;
+using System.Security.Claims;
 
 namespace PantmigService.Endpoints
 {
@@ -26,7 +21,7 @@ namespace PantmigService.Endpoints
         public record MeetingPointRequest(int ListingId, decimal Latitude, decimal Longitude);
         public record CancelRequest(int ListingId);
         public record SearchRequest(int CityId, bool OnlyActive = true);
-        public record PagedSearchRequest<T>(int CityId, int Page =1, int PageSize =20, bool OnlyActive = true);
+        public record PagedSearchRequest<T>(int CityId, int Page = 1, int PageSize = 20, bool OnlyActive = true);
 
         public static IEndpointRouteBuilder MapRecycleListingEndpoints(this IEndpointRouteBuilder app)
         {
@@ -41,9 +36,9 @@ namespace PantmigService.Endpoints
                 {
                     var p = page.GetValueOrDefault(1);
                     var ps = pageSize.GetValueOrDefault(20);
-                    if (p <=0) p =1;
-                    if (ps <=0) ps =20;
-                    if (ps >100) ps =100;
+                    if (p <= 0) p = 1;
+                    if (ps <= 0) ps = 20;
+                    if (ps > 100) ps = 100;
                     var data = await svc.GetActivePagedAsync(p, ps, ctx.RequestAborted);
                     var dto = data.Map(l => l.ToResponse());
                     return Results.Ok(dto);
@@ -75,13 +70,13 @@ namespace PantmigService.Endpoints
                 var logger = lf.CreateLogger("Listings");
                 try
                 {
-                    if (req.CityId <=0)
+                    if (req.CityId <= 0)
                     {
                         return Results.Problem(title: "Invalid search", detail: "cityId must be a positive integer.", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
                     }
 
-                    var pageVal = req.Page <=0 ?1 : req.Page;
-                    var pageSizeVal = req.PageSize <=0 ?20 : Math.Min(req.PageSize,100);
+                    var pageVal = req.Page <= 0 ? 1 : req.Page;
+                    var pageSizeVal = req.PageSize <= 0 ? 20 : Math.Min(req.PageSize, 100);
 
                     var result = await svc.SearchAsync(req.CityId, pageVal, pageSizeVal, req.OnlyActive, ctx.RequestAborted);
                     var mapped = result.Map(l => l.ToResponse());
@@ -339,7 +334,7 @@ namespace PantmigService.Endpoints
                 };
                 return op;
             })
-            .WithMetadata(new RequestSizeLimitAttribute(64L *1024 *1024))
+            .WithMetadata(new RequestSizeLimitAttribute(64L * 1024 * 1024))
             .Produces<RecycleListingResponse>(StatusCodes.Status201Created, contentType: "application/json")
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized);
@@ -589,7 +584,7 @@ namespace PantmigService.Endpoints
 
                     await using var ms = new MemoryStream();
                     await file.CopyToAsync(ms, ctx.RequestAborted);
-                    ms.Position =0;
+                    ms.Position = 0;
 
                     var scan = await av.ScanAsync(ms, file.FileName, ctx.RequestAborted);
                     if (scan.Status == AntivirusScanStatus.Infected)
@@ -629,7 +624,7 @@ namespace PantmigService.Endpoints
                 op.Description = "Recycler uploads the receipt image as multipart/form-data with fields: listingId, reportedAmount, file. This does not affect listing status and is available even after completion.";
                 return op;
             })
-            .WithMetadata(new RequestSizeLimitAttribute(64L *1024 *1024))
+            .WithMetadata(new RequestSizeLimitAttribute(64L * 1024 * 1024))
             .Produces(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized);
@@ -688,7 +683,7 @@ namespace PantmigService.Endpoints
                         return Results.Forbid();
                     }
 
-                    if (item.ReceiptImageBytes is null || item.ReceiptImageBytes.Length ==0)
+                    if (item.ReceiptImageBytes is null || item.ReceiptImageBytes.Length == 0)
                     {
                         return Results.NotFound();
                     }

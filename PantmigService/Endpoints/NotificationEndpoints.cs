@@ -1,6 +1,6 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Mvc;
 using PantmigService.Services;
+using System.Security.Claims;
 
 namespace PantmigService.Endpoints
 {

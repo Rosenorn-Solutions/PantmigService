@@ -1,6 +1,3 @@
-using Microsoft.AspNetCore.Http;
-using PantmigService.Entities;
-
 namespace PantmigService.Services;
 
 public class RecycleListingValidationService : IRecycleListingValidationService

@@ -6,7 +6,6 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using PantmigService.Data;
 using PantmigService.Endpoints;
 using PantmigService.Endpoints.Helpers;
@@ -15,9 +14,7 @@ using PantmigService.Security;
 using PantmigService.Services;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using System.Security.Claims;
 using System.Text;
-using System.Text.Encodings.Web;
 
 namespace PantMigTesting.Endpoints;
 

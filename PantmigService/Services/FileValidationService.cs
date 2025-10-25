@@ -1,5 +1,3 @@
-using Microsoft.AspNetCore.Http;
-
 namespace PantmigService.Services;
 
 public class FileValidationService(IRecycleListingValidationService listingValidator) : IFileValidationService

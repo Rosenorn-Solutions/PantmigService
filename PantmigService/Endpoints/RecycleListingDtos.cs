@@ -1,4 +1,3 @@
-using System.Text.Json.Serialization;
 using PantmigService.Entities;
 
 namespace PantmigService.Endpoints;

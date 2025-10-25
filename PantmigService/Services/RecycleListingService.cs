@@ -1,8 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using PantmigService.Data;
 using PantmigService.Entities;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Caching.Memory;
 using PantmigService.Utils; // for PagedResult
 
 namespace PantmigService.Services
@@ -17,7 +16,7 @@ namespace PantmigService.Services
         private static readonly TimeSpan ListingsCacheTtl = TimeSpan.FromSeconds(30);
         private static readonly TimeSpan ListingCacheTtl = TimeSpan.FromMinutes(5);
 
-        private const int MaxPageSize =100;
+        private const int MaxPageSize = 100;
 
         private string ActiveListingsCacheKey(int cityId) => $"listings:active:city:{cityId}";
         private string ActiveAllCacheKey(int page, int pageSize) => $"listings:active:all:p{page}:s{pageSize}";
@@ -82,8 +81,8 @@ namespace PantmigService.Services
 
         public async Task<PagedResult<RecycleListing>> GetActivePagedAsync(int page, int pageSize, CancellationToken ct = default)
         {
-            if (page <=0) page =1;
-            if (pageSize <=0) pageSize =20;
+            if (page <= 0) page = 1;
+            if (pageSize <= 0) pageSize = 20;
             if (pageSize > MaxPageSize) pageSize = MaxPageSize;
 
             var key = ActiveAllCacheKey(page, pageSize);
@@ -101,7 +100,7 @@ namespace PantmigService.Services
                 .OrderByDescending(x => x.CreatedAt)
                 .Include(l => l.Items)
                 .Include(l => l.Images)
-                .Skip((page -1) * pageSize)
+                .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync(ct);
 
@@ -294,7 +293,7 @@ namespace PantmigService.Services
         public async Task<bool> SetMeetingPointAsync(int id, string donatorUserId, decimal latitude, decimal longitude, CancellationToken ct = default)
         {
             _logger.LogDebug("Setting meeting point for listing {ListingId} by donator {Donator} to ({Lat},{Lon})", id, donatorUserId, latitude, longitude);
-            if (latitude is < -90 or >90 || longitude is < -180 or >180)
+            if (latitude is < -90 or > 90 || longitude is < -180 or > 180)
             {
                 _logger.LogWarning("SetMeetingPoint failed: invalid coordinates for listing {ListingId}", id);
                 return false;
@@ -323,8 +322,8 @@ namespace PantmigService.Services
                 _logger.LogWarning("SetMeetingPoint failed: invalid status {Status} for listing {ListingId}", listing.Status, id);
                 return false;
             }
-            listing.MeetingLatitude = decimal.Round(latitude,6);
-            listing.MeetingLongitude = decimal.Round(longitude,6);
+            listing.MeetingLatitude = decimal.Round(latitude, 6);
+            listing.MeetingLongitude = decimal.Round(longitude, 6);
             listing.MeetingSetAt = DateTime.UtcNow;
             await _db.SaveChangesAsync(ct);
 
@@ -464,7 +463,7 @@ namespace PantmigService.Services
             var query = _db.RecycleListings.AsNoTracking();
 
             query = query.Where(l => l.CityId == cityId);
-            
+
             if (onlyActive)
             {
                 query = query.Where(l => l.IsActive && (l.Status == ListingStatus.Created || l.Status == ListingStatus.PendingAcceptance));
@@ -484,9 +483,9 @@ namespace PantmigService.Services
         // New: paginated search
         public async Task<PagedResult<RecycleListing>> SearchAsync(int cityId, int page, int pageSize, bool onlyActive = true, CancellationToken ct = default)
         {
-            if (page <=0) page =1;
-            if (pageSize <=0) pageSize =20;
-            if (pageSize >MaxPageSize) pageSize =MaxPageSize;
+            if (page <= 0) page = 1;
+            if (pageSize <= 0) pageSize = 20;
+            if (pageSize > MaxPageSize) pageSize = MaxPageSize;
 
             var key = SearchPageCacheKey(cityId, page, pageSize, onlyActive);
             if (_cache.TryGetValue<PagedResult<RecycleListing>>(key, out var cached) && cached is not null)
@@ -507,7 +506,7 @@ namespace PantmigService.Services
                 .OrderByDescending(l => l.CreatedAt)
                 .Include(l => l.Items)
                 .Include(l => l.Images)
-                .Skip((page -1) * pageSize)
+                .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync(ct);
 

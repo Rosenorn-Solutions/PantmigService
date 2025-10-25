@@ -1,11 +1,10 @@
-using System.Text;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging.Abstractions;
-using PantmigService.Entities;
-using PantmigService.Services;
 using PantmigService.Endpoints.Helpers;
+using PantmigService.Entities;
 using PantmigService.Security;
-using Xunit;
+using PantmigService.Services;
+using System.Text;
 
 namespace PantMigTesting.Services;
 
@@ -35,7 +34,7 @@ public class ValidationServicesTests
     {
         var from = DateOnly.FromDateTime(DateTime.UtcNow.Date);
         var to = from; // same day invalid per rule (must be after)
-        var res = _listingValidator.ValidateCreate("Title", "Desc", "City", null, from, to, null, null, new());
+        var res = _listingValidator.ValidateCreate("Title", "Desc", "City", null, from, to, null, null, []);
         Assert.False(res.IsValid);
         Assert.Contains("AvailableTo", res.Problem!.Detail);
     }
@@ -112,7 +111,7 @@ public class ValidationServicesTests
     [Fact]
     public void FileValidation_Succeeds_For_Image()
     {
-        var bytes = new byte[] { 1,2,3 };
+        var bytes = new byte[] { 1, 2, 3 };
         using var ms = new MemoryStream(bytes);
         var file = new FormFile(ms, 0, bytes.Length, "file", "img.jpg") { Headers = new HeaderDictionary(), ContentType = "image/jpeg" };
         var res = _fileValidator.ValidateImage(file);
@@ -204,7 +203,7 @@ public class ValidationServicesTests
         formContent.Add(new StringContent(DateOnly.FromDateTime(DateTime.UtcNow.Date.AddDays(1)).ToString("yyyy-MM-dd")), "AvailableTo");
         formContent.Add(new StringContent("[{\"Type\":3,\"Quantity\":1}]"), "Items");
         var bytes = Encoding.UTF8.GetBytes("hello");
-        formContent.Add(new ByteArrayContent(bytes){ Headers = { ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain") } }, "images", "note.txt");
+        formContent.Add(new ByteArrayContent(bytes) { Headers = { ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain") } }, "images", "note.txt");
 
         var stream = new MemoryStream();
         await formContent.CopyToAsync(stream);

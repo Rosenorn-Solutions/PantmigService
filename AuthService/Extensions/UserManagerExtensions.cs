@@ -1,8 +1,6 @@
-using System.Threading;
-using System.Threading.Tasks;
+using AuthService.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
-using AuthService.Entities;
 
 namespace AuthService.Extensions
 {

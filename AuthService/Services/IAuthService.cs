@@ -1,7 +1,6 @@
 using AuthService.Entities;
 using AuthService.Models;
 using Microsoft.AspNetCore.Identity;
-using Microsoft.EntityFrameworkCore;
 
 namespace AuthService.Services
 {
