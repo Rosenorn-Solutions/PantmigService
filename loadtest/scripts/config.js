@@ -1,0 +1,12 @@
+export default {
+ baseUrl: "https://api.pantmig.dk",
+ authBase: "https://auth.pantmig.dk",
+ thresholds: {
+ http_req_failed: "rate<0.01",
+ http_req_duration_p95:500
+ },
+ defaultUsers: {
+ donator: { username: "donor@donor.dk", password: "Donor1234!" },
+ recycler: { username: "recycler@recycler.dk", password: "Recycler1234!" }
+ }
+};

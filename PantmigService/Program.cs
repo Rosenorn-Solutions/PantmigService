@@ -181,6 +181,9 @@ namespace PantmigService
 
             builder.Services.AddSignalR();
 
+            // In-memory caching for read-heavy endpoints
+            builder.Services.AddMemoryCache();
+            
             var app = builder.Build();
 
             using (var scope = app.Services.CreateScope())

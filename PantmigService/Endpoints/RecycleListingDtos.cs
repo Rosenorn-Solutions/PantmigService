@@ -25,7 +25,6 @@ public record RecycleListingResponse
     public string? ChatSessionId { get; init; }
     public decimal? ReportedAmount { get; init; }
     public decimal? VerifiedAmount { get; init; }
-    public byte[]? ReceiptImageBytes { get; init; }
     public string? ReceiptImageUrl { get; init; }
     public decimal? MeetingPointLatitude { get; init; }
     public decimal? MeetingPointLongtitude { get; init; }
@@ -55,7 +54,6 @@ public static class RecycleListingMapper
             ChatSessionId = l.ChatSessionId,
             ReportedAmount = l.ReportedAmount,
             VerifiedAmount = l.VerifiedAmount,
-            ReceiptImageBytes = l.ReceiptImageBytes,
             ReceiptImageUrl = l.ReceiptImageUrl,
             MeetingPointLatitude = l.MeetingLatitude,
             MeetingPointLongtitude = l.MeetingLongitude,

@@ -24,6 +24,7 @@ namespace PantmigService.Endpoints
         public record PickupConfirmRequest(int ListingId);
         public record MeetingPointRequest(int ListingId, decimal Latitude, decimal Longitude);
         public record CancelRequest(int ListingId);
+        public record SearchRequest(int CityId, bool OnlyActive = true);
 
         public static IEndpointRouteBuilder MapRecycleListingEndpoints(this IEndpointRouteBuilder app)
         {
@@ -44,15 +45,98 @@ namespace PantmigService.Endpoints
                     return Results.Problem(title: "Failed to get active listings", detail: ex.Message, statusCode: StatusCodes.Status500InternalServerError, instance: ctx.TraceIdentifier);
                 }
             })
-                .WithOpenApi(op =>
+            .WithOpenApi(op =>
+            {
+                op.OperationId = "Listings_GetActive";
+                op.Summary = "Get active recycle listings";
+                op.Description = "Returns all listings that are currently active and available.";
+                return op;
+            })
+            .RequireAuthorization()
+            .Produces<IEnumerable<RecycleListingResponse>>(StatusCodes.Status200OK, contentType: "application/json");
+
+            // New: generic search endpoint using SearchRequest
+            group.MapPost("/search", async (SearchRequest req, IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx) =>
+            {
+                var logger = lf.CreateLogger("Listings");
+                try
                 {
-                    op.OperationId = "Listings_GetActive";
-                    op.Summary = "Get active recycle listings";
-                    op.Description = "Returns all listings that are currently active and available.";
-                    return op;
-                })
-                .RequireAuthorization()
-                .Produces<IEnumerable<RecycleListingResponse>>(StatusCodes.Status200OK, contentType: "application/json");
+                    if (req.CityId <=0)
+                    {
+                        return Results.Problem(title: "Invalid search", detail: "cityId must be a positive integer.", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
+                    }
+
+                    var items = await svc.SearchAsync(req.CityId, req.OnlyActive, ctx.RequestAborted);
+                    return Results.Ok(items.ToResponse());
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Failed to search listings");
+                    return Results.Problem(title: "Failed to search listings", detail: ex.Message, statusCode: StatusCodes.Status500InternalServerError, instance: ctx.TraceIdentifier);
+                }
+            })
+            .RequireAuthorization()
+            .Accepts<SearchRequest>("application/json")
+            .WithOpenApi(op =>
+            {
+                op.OperationId = "Listings_Search";
+                op.Summary = "Search listings";
+                op.Description = "Search for listings. Currently supports filtering by cityId and an optional onlyActive flag. This payload can be extended later with more filters.";
+                op.RequestBody = new OpenApiRequestBody
+                {
+                    Required = true,
+                    Content =
+                    {
+                        ["application/json"] = new OpenApiMediaType
+                        {
+                            Schema = new OpenApiSchema
+                            {
+                                Type = "object",
+                                Required = { nameof(SearchRequest.CityId) },
+                                Properties =
+                                {
+                                    [nameof(SearchRequest.CityId)] = new OpenApiSchema { Type = "integer", Format = "int32", Description = "City identifier" },
+                                    [nameof(SearchRequest.OnlyActive)] = new OpenApiSchema { Type = "boolean", Description = "If true, returns only active listings in Created or PendingAcceptance states.", Default = new Microsoft.OpenApi.Any.OpenApiBoolean(true) }
+                                }
+                            }
+                        }
+                    }
+                };
+                return op;
+            })
+            .Produces<IEnumerable<RecycleListingResponse>>(StatusCodes.Status200OK, contentType: "application/json")
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status401Unauthorized);
+
+            group.MapGet("/{id:int}", async (int id, IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx) =>
+            {
+                var logger = lf.CreateLogger("Listings");
+                try
+                {
+                    var item = await svc.GetByIdAsync(id, ctx.RequestAborted);
+                    if (item is null)
+                    {
+                        logger.LogWarning("Listing {ListingId} not found", id);
+                        return Results.NotFound(new { error = "Listing not found" });
+                    }
+                    return Results.Ok(item.ToResponse());
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Failed to get listing {ListingId}", id);
+                    return Results.Problem(title: "Failed to get listing", detail: ex.Message, statusCode: StatusCodes.Status500InternalServerError, instance: ctx.TraceIdentifier);
+                }
+            })
+            .WithOpenApi(op =>
+            {
+                op.OperationId = "Listings_GetById";
+                op.Summary = "Get a listing by id";
+                op.Description = "Retrieves a single recycle listing by its identifier.";
+                return op;
+            })
+            .RequireAuthorization()
+            .Produces<RecycleListingResponse>(StatusCodes.Status200OK, contentType: "application/json")
+            .Produces(StatusCodes.Status404NotFound);
 
             group.MapGet("/my-applications", async (ClaimsPrincipal user, IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx) =>
             {
@@ -116,36 +200,6 @@ namespace PantmigService.Endpoints
             })
             .Produces<IEnumerable<RecycleListingResponse>>(StatusCodes.Status200OK, contentType: "application/json")
             .Produces(StatusCodes.Status401Unauthorized);
-
-            group.MapGet("/{id:int}", async (int id, IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx) =>
-            {
-                var logger = lf.CreateLogger("Listings");
-                try
-                {
-                    var item = await svc.GetByIdAsync(id, ctx.RequestAborted);
-                    if (item is null)
-                    {
-                        logger.LogWarning("Listing {ListingId} not found", id);
-                        return Results.NotFound(new { error = "Listing not found" });
-                    }
-                    return Results.Ok(item.ToResponse());
-                }
-                catch (Exception ex)
-                {
-                    logger.LogError(ex, "Failed to get listing {ListingId}", id);
-                    return Results.Problem(title: "Failed to get listing", detail: ex.Message, statusCode: StatusCodes.Status500InternalServerError, instance: ctx.TraceIdentifier);
-                }
-            })
-            .WithOpenApi(op =>
-            {
-                op.OperationId = "Listings_GetById";
-                op.Summary = "Get a listing by id";
-                op.Description = "Retrieves a single recycle listing by its identifier.";
-                return op;
-            })
-            .RequireAuthorization()
-            .Produces<RecycleListingResponse>(StatusCodes.Status200OK, contentType: "application/json")
-            .Produces(StatusCodes.Status404NotFound);
 
             group.MapPost("/", async (HttpRequest httpRequest, ClaimsPrincipal user, IRecycleListingService svc, IRecycleListingValidationService validator, ICreateListingRequestParser parser, ICityResolver cityResolver, ILoggerFactory lf, HttpContext ctx) =>
             {
@@ -256,7 +310,7 @@ namespace PantmigService.Endpoints
                                     {
                                         Type = "array",
                                         Items = new OpenApiSchema { Type = "string", Format = "binary" },
-                                        Description = "Zero or more images (PNG/JPEG). Max 6 images, each <= 5 MB."
+                                        Description = "Zero or more images (PNG/JPEG). Max6 images, each <=5 MB."
                                     }
                                 }
                             }
@@ -265,7 +319,7 @@ namespace PantmigService.Endpoints
                 };
                 return op;
             })
-            .WithMetadata(new RequestSizeLimitAttribute(64L * 1024 * 1024))
+            .WithMetadata(new RequestSizeLimitAttribute(64L *1024 *1024))
             .Produces<RecycleListingResponse>(StatusCodes.Status201Created, contentType: "application/json")
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized);
@@ -515,7 +569,7 @@ namespace PantmigService.Endpoints
 
                     await using var ms = new MemoryStream();
                     await file.CopyToAsync(ms, ctx.RequestAborted);
-                    ms.Position = 0;
+                    ms.Position =0;
 
                     var scan = await av.ScanAsync(ms, file.FileName, ctx.RequestAborted);
                     if (scan.Status == AntivirusScanStatus.Infected)
@@ -555,7 +609,7 @@ namespace PantmigService.Endpoints
                 op.Description = "Recycler uploads the receipt image as multipart/form-data with fields: listingId, reportedAmount, file. This does not affect listing status and is available even after completion.";
                 return op;
             })
-            .WithMetadata(new RequestSizeLimitAttribute(64L * 1024 * 1024))
+            .WithMetadata(new RequestSizeLimitAttribute(64L *1024 *1024))
             .Produces(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized);
@@ -594,6 +648,53 @@ namespace PantmigService.Endpoints
             .Produces(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized);
+
+            group.MapGet("/{id:int}/receipt", async (int id, ClaimsPrincipal user, IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx) =>
+            {
+                var logger = lf.CreateLogger("Listings");
+                try
+                {
+                    var userId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+                    if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
+
+                    var item = await svc.GetByIdAsync(id, ctx.RequestAborted);
+                    if (item is null) return Results.NotFound();
+
+                    // Authorization: only allow listing owner or assigned recycler to download
+                    var isOwner = string.Equals(item.CreatedByUserId, userId, StringComparison.Ordinal);
+                    var isAssignedRecycler = string.Equals(item.AssignedRecyclerUserId, userId, StringComparison.Ordinal);
+                    if (!isOwner && !isAssignedRecycler)
+                    {
+                        return Results.Forbid();
+                    }
+
+                    if (item.ReceiptImageBytes is null || item.ReceiptImageBytes.Length ==0)
+                    {
+                        return Results.NotFound();
+                    }
+
+                    var contentType = item.ReceiptImageContentType ?? "application/octet-stream";
+                    var fileName = item.ReceiptImageFileName ?? $"receipt-{id}";
+                    return Results.File(item.ReceiptImageBytes, contentType, fileName);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogError(ex, "Failed to get receipt for listing {ListingId}", id);
+                    return Results.Problem(title: "Failed to get receipt", detail: ex.Message, statusCode: StatusCodes.Status500InternalServerError, instance: ctx.TraceIdentifier);
+                }
+            })
+            .RequireAuthorization()
+            .WithOpenApi(op =>
+            {
+                op.OperationId = "Listings_GetReceipt";
+                op.Summary = "Download receipt image for a listing";
+                op.Description = "Returns the raw receipt image bytes with correct content-type. Only the listing owner or assigned recycler may download.";
+                return op;
+            })
+            .Produces(StatusCodes.Status200OK, contentType: "application/octet-stream")
+            .Produces(StatusCodes.Status401Unauthorized)
+            .Produces(StatusCodes.Status403Forbidden)
+            .Produces(StatusCodes.Status404NotFound);
 
             return app;
         }
