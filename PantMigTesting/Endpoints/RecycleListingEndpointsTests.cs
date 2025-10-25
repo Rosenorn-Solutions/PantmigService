@@ -16,6 +16,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace PantMigTesting.Endpoints
 {
@@ -116,6 +117,9 @@ namespace PantMigTesting.Endpoints
 
                     // Register a no-op antivirus scanner for tests
                     services.AddSingleton<IAntivirusScanner, NoOpAntivirusScanner>();
+
+                    // Add memory cache required by RecycleListingService
+                    services.AddMemoryCache();
 
                     // Ignore reference cycles introduced by navigation properties (Listing <-> Items)
                     services.ConfigureHttpJsonOptions(o =>

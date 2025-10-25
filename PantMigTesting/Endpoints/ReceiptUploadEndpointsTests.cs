@@ -86,15 +86,22 @@ public class ReceiptUploadEndpointsTests
         var uploadResp = await client.PostAsync("/listings/receipt/upload", form);
         uploadResp.EnsureSuccessStatusCode();
 
-        // 6. Verify state remains Completed with uploaded bytes stored
+        // 6. Verify state remains Completed and receipt can be downloaded from the dedicated endpoint
         var final = await client.GetFromJsonAsync<RecycleListing>($"/listings/{id}");
         Assert.NotNull(final);
         Assert.Equal(ListingStatus.Completed, final!.Status);
         Assert.False(final.IsActive);
         Assert.Null(final.ReceiptImageUrl);
         Assert.Equal(123.45m, final.ReportedAmount);
-        Assert.NotNull(final.ReceiptImageBytes);
-        Assert.True(final.ReceiptImageBytes!.Length > 0);
+
+        // New assertion: GET /listings/{id}/receipt returns the uploaded image
+        client.SetTestUser("recycler-1", userType: "Recycler", isMitIdVerified: true);
+        var receiptResp = await client.GetAsync($"/listings/{id}/receipt");
+        receiptResp.EnsureSuccessStatusCode();
+        Assert.Equal("image/jpeg", receiptResp.Content.Headers.ContentType?.MediaType);
+        var downloaded = await receiptResp.Content.ReadAsByteArrayAsync();
+        Assert.NotNull(downloaded);
+        Assert.True(downloaded.Length > 0);
     }
 
     // Optional integration test: requires a running ClamAV daemon.
@@ -204,6 +211,8 @@ public class ReceiptUploadEndpointsTests
                 services.AddScoped<IFileValidationService, FileValidationService>();
                 services.AddScoped<IChatValidationService, ChatValidationService>();
                 services.AddScoped<ICreateListingRequestParser, CreateListingRequestParser>();
+
+                services.AddMemoryCache();
 
                 // Use real ClamAV for this server
                 services.AddSingleton<IAntivirusScanner>(_ => new ClamAvAntivirusScanner(new ClamAvOptions
