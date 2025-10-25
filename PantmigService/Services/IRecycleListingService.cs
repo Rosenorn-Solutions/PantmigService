@@ -20,5 +20,6 @@ namespace PantmigService.Services
         Task<bool> SubmitReceiptUploadAsync(int id, string recyclerUserId, string fileName, string contentType, byte[] data, decimal reportedAmount, CancellationToken ct = default);
         Task<bool> SetMeetingPointAsync(int id, string donatorUserId, decimal latitude, decimal longitude, CancellationToken ct = default);
         Task<bool> CancelAsync(int id, string donatorUserId, CancellationToken ct = default);
+        Task<IEnumerable<RecycleListing>> SearchAsync(int cityId, bool onlyActive = true, CancellationToken ct = default);
     }
 }

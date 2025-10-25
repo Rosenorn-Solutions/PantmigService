@@ -16,6 +16,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text.Encodings.Web;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace PantMigTesting.Endpoints
 {
@@ -116,6 +117,9 @@ namespace PantMigTesting.Endpoints
 
                     // Register a no-op antivirus scanner for tests
                     services.AddSingleton<IAntivirusScanner, NoOpAntivirusScanner>();
+
+                    // Add memory cache required by RecycleListingService
+                    services.AddMemoryCache();
 
                     // Ignore reference cycles introduced by navigation properties (Listing <-> Items)
                     services.ConfigureHttpJsonOptions(o =>
@@ -255,7 +259,7 @@ namespace PantMigTesting.Endpoints
 
         [Fact]
         public async Task Applicants_Get_Authorization_And_Ownership()
-       {
+        {
             using var server = TestHostBuilder.CreateServer();
             using var client = server.CreateClient();
 
@@ -342,6 +346,82 @@ namespace PantMigTesting.Endpoints
             // Second cancel attempt should be BadRequest
             var secondCancel = await client.PostAsJsonAsync("/listings/cancel", new { ListingId = id });
             Assert.Equal(HttpStatusCode.BadRequest, secondCancel.StatusCode);
+        }
+
+        [Fact]
+        public async Task Search_Endpoint_Filters_By_City_And_OnlyActive_Defaults_To_True()
+        {
+            using var server = TestHostBuilder.CreateServer();
+            using var client = server.CreateClient();
+
+            // Create three listings in city1 with different states + one in city2
+            client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
+            var l1Resp = await client.PostAsJsonAsync("/listings", new { Title = "L1", Description = "desc", City = "CPH", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Items = new[] { new { Type = 3, Quantity = 5 } } });
+            l1Resp.EnsureSuccessStatusCode();
+            var l1 = await l1Resp.Content.ReadFromJsonAsync<RecycleListing>();
+            Assert.NotNull(l1);
+
+            var l2Resp = await client.PostAsJsonAsync("/listings", new { Title = "L2", Description = "desc", City = "CPH", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Items = new[] { new { Type = 3, Quantity = 6 } } });
+            l2Resp.EnsureSuccessStatusCode();
+            var l2 = await l2Resp.Content.ReadFromJsonAsync<RecycleListing>();
+            Assert.NotNull(l2);
+
+            // Request pickup to make l2 PendingAcceptance
+            client.SetTestUser("recycler-1", userType: "Recycler", isMitIdVerified: true);
+            var pickup = await client.PostAsJsonAsync("/listings/pickup/request", new { ListingId = l2!.Id });
+            pickup.EnsureSuccessStatusCode();
+
+            // Create another in same city and then cancel it to make inactive
+            client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
+            var l3Resp = await client.PostAsJsonAsync("/listings", new { Title = "L3", Description = "desc", City = "CPH", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Items = new[] { new { Type = 3, Quantity = 7 } } });
+            l3Resp.EnsureSuccessStatusCode();
+            var l3 = await l3Resp.Content.ReadFromJsonAsync<RecycleListing>();
+            var cancelResp = await client.PostAsJsonAsync("/listings/cancel", new { ListingId = l3!.Id });
+            cancelResp.EnsureSuccessStatusCode();
+
+            // Create listing in a different city
+            var otherCityResp = await client.PostAsJsonAsync("/listings", new { Title = "OtherCity", Description = "desc", City = "Aalborg", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Items = new[] { new { Type = 3, Quantity = 1 } } });
+            otherCityResp.EnsureSuccessStatusCode();
+            var other = await otherCityResp.Content.ReadFromJsonAsync<RecycleListing>();
+
+            // Search for cityId of CPH
+            var searchResp = await client.PostAsJsonAsync("/listings/search", new { CityId = l1!.CityId });
+            searchResp.EnsureSuccessStatusCode();
+            var results = await searchResp.Content.ReadFromJsonAsync<List<RecycleListing>>();
+            Assert.NotNull(results);
+            // Only l1 (Created) and l2 (PendingAcceptance) should be present
+            Assert.Contains(results!, x => x.Id == l1.Id);
+            Assert.Contains(results!, x => x.Id == l2!.Id);
+            Assert.DoesNotContain(results!, x => x.Id == l3!.Id);
+            Assert.DoesNotContain(results!, x => x.Id == other!.Id);
+        }
+
+        [Fact]
+        public async Task Search_Endpoint_Includes_All_Statuses_When_OnlyActive_False()
+        {
+            using var server = TestHostBuilder.CreateServer();
+            using var client = server.CreateClient();
+
+            // Create two listings in city1 and cancel one
+            client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
+            var l1Resp = await client.PostAsJsonAsync("/listings", new { Title = "L1", Description = "desc", City = "CPH", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Items = new[] { new { Type = 3, Quantity = 5 } } });
+            l1Resp.EnsureSuccessStatusCode();
+            var l1 = await l1Resp.Content.ReadFromJsonAsync<RecycleListing>();
+            var l2Resp = await client.PostAsJsonAsync("/listings", new { Title = "L2", Description = "desc", City = "CPH", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Items = new[] { new { Type = 3, Quantity = 6 } } });
+            l2Resp.EnsureSuccessStatusCode();
+            var l2 = await l2Resp.Content.ReadFromJsonAsync<RecycleListing>();
+
+            // Cancel l2
+            var cancel = await client.PostAsJsonAsync("/listings/cancel", new { ListingId = l2!.Id });
+            cancel.EnsureSuccessStatusCode();
+
+            // Search for cityId with onlyActive=false
+            var searchResp = await client.PostAsJsonAsync("/listings/search", new { CityId = l1!.CityId, OnlyActive = false });
+            searchResp.EnsureSuccessStatusCode();
+            var results = await searchResp.Content.ReadFromJsonAsync<List<RecycleListing>>();
+            Assert.NotNull(results);
+            Assert.Contains(results!, x => x.Id == l1.Id);
+            Assert.Contains(results!, x => x.Id == l2!.Id);
         }
     }
 }

@@ -8,6 +8,7 @@ using PantmigService.Services;
 using Xunit;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Collections.Generic;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace PantMigTesting.Services
 {
@@ -32,7 +33,11 @@ namespace PantMigTesting.Services
             return new PantmigDbContext(options);
         }
 
-        private static RecycleListingService CreateService(PantmigDbContext db) => new(db, NullLogger<RecycleListingService>.Instance, new TestNotifications());
+        private static RecycleListingService CreateService(PantmigDbContext db)
+        {
+            var cache = new MemoryCache(new MemoryCacheOptions());
+            return new RecycleListingService(db, NullLogger<RecycleListingService>.Instance, new TestNotifications(), cache);
+        }
 
         private static RecycleListing NewListing(string donatorId = "donator-1", DateTime? createdAt = null, bool isActive = true, ListingStatus status = ListingStatus.Created, int quantity = 50)
             => new()

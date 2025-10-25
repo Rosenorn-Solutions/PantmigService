@@ -137,6 +137,7 @@ public class ListingImageCreationTests
                 services.AddScoped<IChatValidationService, ChatValidationService>();
                 services.AddScoped<ICreateListingRequestParser, CreateListingRequestParser>();
                 services.AddSingleton<IAntivirusScanner>(new FakeInfectedScanner());
+                services.AddMemoryCache();
             })
             .Configure(app =>
             {

@@ -2,14 +2,24 @@ using Microsoft.EntityFrameworkCore;
 using PantmigService.Data;
 using PantmigService.Entities;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace PantmigService.Services
 {
-    public class RecycleListingService(PantmigDbContext db, ILogger<RecycleListingService> logger, INotificationService notifications) : IRecycleListingService
+    public class RecycleListingService(PantmigDbContext db, ILogger<RecycleListingService> logger, INotificationService notifications, IMemoryCache cache) : IRecycleListingService
     {
         private readonly PantmigDbContext _db = db;
         private readonly ILogger<RecycleListingService> _logger = logger;
         private readonly INotificationService _notifications = notifications;
+        private readonly IMemoryCache _cache = cache;
+
+        private static readonly TimeSpan ListingsCacheTtl = TimeSpan.FromSeconds(30);
+        private static readonly TimeSpan ListingCacheTtl = TimeSpan.FromMinutes(5);
+
+        private string ActiveListingsCacheKey(int cityId) => $"listings:active:city:{cityId}";
+        private string ListingCacheKey(int id) => $"listing:{id}";
+        private string UserListingsCacheKey(string userId) => $"listings:user:{userId}";
+        private string SearchCacheKey(int cityId, bool onlyActive) => $"listings:search:city:{cityId}:onlyActive:{onlyActive}";
 
         public async Task<RecycleListing> CreateAsync(RecycleListing listing, CancellationToken ct = default)
         {
@@ -17,17 +27,42 @@ namespace PantmigService.Services
             _db.RecycleListings.Add(listing);
             await _db.SaveChangesAsync(ct);
             _logger.LogInformation("Listing {ListingId} created", listing.Id);
+
+            // Invalidate caches related to listings
+            _cache.Remove(UserListingsCacheKey(listing.CreatedByUserId));
+            _cache.Remove(ActiveListingsCacheKey(listing.CityId));
+            _cache.Remove(SearchCacheKey(listing.CityId, true));
             return listing;
         }
 
-        public Task<RecycleListing?> GetByIdAsync(int id, CancellationToken ct = default)
+        public async Task<RecycleListing?> GetByIdAsync(int id, CancellationToken ct = default)
         {
+            var key = ListingCacheKey(id);
+            if (_cache.TryGetValue<RecycleListing?>(key, out var cached) && cached is not null)
+            {
+                _logger.LogDebug("Returning listing {ListingId} from cache", id);
+                return cached;
+            }
+
             _logger.LogDebug("Retrieving listing {ListingId}", id);
-            return _db.RecycleListings.AsNoTracking().Include(l => l.Items).Include(l => l.Images).FirstOrDefaultAsync(x => x.Id == id, ct);
+            var item = await _db.RecycleListings.AsNoTracking().Include(l => l.Items).Include(l => l.Images).FirstOrDefaultAsync(x => x.Id == id, ct);
+            if (item is not null)
+            {
+                _cache.Set(key, item, ListingCacheTtl);
+            }
+            return item;
         }
 
         public async Task<IEnumerable<RecycleListing>> GetActiveAsync(CancellationToken ct = default)
         {
+            // Cache active listings globally (no per-city in this method)
+            const string key = "listings:active:all";
+            if (_cache.TryGetValue<IEnumerable<RecycleListing>>(key, out var cached) && cached is not null)
+            {
+                _logger.LogDebug("Returning active listings from cache");
+                return cached;
+            }
+
             _logger.LogDebug("Fetching active listings");
             var list = await _db.RecycleListings.AsNoTracking()
                 .Where(x => x.IsActive && (x.Status == ListingStatus.Created || x.Status == ListingStatus.PendingAcceptance))
@@ -36,11 +71,19 @@ namespace PantmigService.Services
                 .Include(l => l.Images)
                 .ToListAsync(ct);
             _logger.LogDebug("Fetched {Count} active listings", list.Count);
+            _cache.Set(key, list, ListingsCacheTtl);
             return list;
         }
 
         public async Task<IEnumerable<RecycleListing>> GetByUserAsync(string userId, CancellationToken ct = default)
         {
+            var key = UserListingsCacheKey(userId);
+            if (_cache.TryGetValue<IEnumerable<RecycleListing>>(key, out var cached) && cached is not null)
+            {
+                _logger.LogDebug("Returning user listings for {UserId} from cache", userId);
+                return cached;
+            }
+
             _logger.LogDebug("Fetching listings for user {UserId}", userId);
             var list = await _db.RecycleListings.AsNoTracking()
                 .Where(x => x.CreatedByUserId == userId)
@@ -49,6 +92,7 @@ namespace PantmigService.Services
                 .Include(l => l.Images)
                 .ToListAsync(ct);
             _logger.LogDebug("User {UserId} has {Count} listings", userId, list.Count);
+            _cache.Set(key, list, ListingsCacheTtl);
             return list;
         }
 
@@ -103,6 +147,11 @@ namespace PantmigService.Services
             }
 
             await _db.SaveChangesAsync(ct);
+
+            // Invalidate caches for this listing and lists
+            _cache.Remove(ListingCacheKey(id));
+            _cache.Remove(ActiveListingsCacheKey(listing.CityId));
+            _cache.Remove(SearchCacheKey(listing.CityId, true));
 
             // Notify donator about new application
             await _notifications.CreateAsync(listing.CreatedByUserId, listing.Id, NotificationType.RecyclerApplied,
@@ -170,6 +219,12 @@ namespace PantmigService.Services
             await _db.SaveChangesAsync(ct);
             _logger.LogInformation("Listing {ListingId} accepted recycler {Recycler}", id, recyclerUserId);
 
+            // Invalidate caches
+            _cache.Remove(ListingCacheKey(id));
+            _cache.Remove(ActiveListingsCacheKey(listing.CityId));
+            _cache.Remove(SearchCacheKey(listing.CityId, true));
+            _cache.Remove(UserListingsCacheKey(listing.CreatedByUserId));
+
             // Notify recycler that they were accepted
             await _notifications.CreateAsync(recyclerUserId, listing.Id, NotificationType.DonorAccepted,
                 message: "Your application was accepted.", ct);
@@ -193,6 +248,10 @@ namespace PantmigService.Services
             }
             listing.ChatSessionId = chatSessionId;
             await _db.SaveChangesAsync(ct);
+
+            // Invalidate listing cache
+            _cache.Remove(ListingCacheKey(id));
+
             _logger.LogInformation("Chat started for listing {ListingId}", id);
             return true;
         }
@@ -200,7 +259,7 @@ namespace PantmigService.Services
         public async Task<bool> SetMeetingPointAsync(int id, string donatorUserId, decimal latitude, decimal longitude, CancellationToken ct = default)
         {
             _logger.LogDebug("Setting meeting point for listing {ListingId} by donator {Donator} to ({Lat},{Lon})", id, donatorUserId, latitude, longitude);
-            if (latitude is < -90 or > 90 || longitude is < -180 or > 180)
+            if (latitude is < -90 or >90 || longitude is < -180 or >180)
             {
                 _logger.LogWarning("SetMeetingPoint failed: invalid coordinates for listing {ListingId}", id);
                 return false;
@@ -229,10 +288,14 @@ namespace PantmigService.Services
                 _logger.LogWarning("SetMeetingPoint failed: invalid status {Status} for listing {ListingId}", listing.Status, id);
                 return false;
             }
-            listing.MeetingLatitude = decimal.Round(latitude, 6);
-            listing.MeetingLongitude = decimal.Round(longitude, 6);
+            listing.MeetingLatitude = decimal.Round(latitude,6);
+            listing.MeetingLongitude = decimal.Round(longitude,6);
             listing.MeetingSetAt = DateTime.UtcNow;
             await _db.SaveChangesAsync(ct);
+
+            // Invalidate listing cache
+            _cache.Remove(ListingCacheKey(id));
+
             _logger.LogInformation("Meeting point set for listing {ListingId}", id);
 
             // Notify recycler that meeting point was set
@@ -275,6 +338,13 @@ namespace PantmigService.Services
             listing.CompletedAt = DateTime.UtcNow;
             listing.IsActive = false;
             await _db.SaveChangesAsync(ct);
+
+            // Invalidate caches
+            _cache.Remove(ListingCacheKey(id));
+            _cache.Remove(ActiveListingsCacheKey(listing.CityId));
+            _cache.Remove(SearchCacheKey(listing.CityId, true));
+            _cache.Remove(UserListingsCacheKey(listing.CreatedByUserId));
+
             _logger.LogInformation("Pickup confirmed and listing {ListingId} completed", id);
             return true;
         }
@@ -301,6 +371,13 @@ namespace PantmigService.Services
             listing.ReportedAmount = reportedAmount;
 
             await _db.SaveChangesAsync(ct);
+
+            // Invalidate caches
+            _cache.Remove(ListingCacheKey(id));
+            _cache.Remove(ActiveListingsCacheKey(listing.CityId));
+            _cache.Remove(SearchCacheKey(listing.CityId, true));
+            _cache.Remove(UserListingsCacheKey(listing.CreatedByUserId));
+
             _logger.LogInformation("Receipt uploaded for listing {ListingId}", id);
             return true;
         }
@@ -327,8 +404,46 @@ namespace PantmigService.Services
             listing.Status = ListingStatus.Cancelled;
             listing.IsActive = false;
             await _db.SaveChangesAsync(ct);
+
+            // Invalidate caches
+            _cache.Remove(ListingCacheKey(id));
+            _cache.Remove(ActiveListingsCacheKey(listing.CityId));
+            _cache.Remove(SearchCacheKey(listing.CityId, true));
+            _cache.Remove(UserListingsCacheKey(listing.CreatedByUserId));
+
             _logger.LogInformation("Listing {ListingId} cancelled", id);
             return true;
+        }
+
+        // Generic search implementation
+        public async Task<IEnumerable<RecycleListing>> SearchAsync(int cityId, bool onlyActive = true, CancellationToken ct = default)
+        {
+            var key = SearchCacheKey(cityId, onlyActive);
+            if (_cache.TryGetValue<IEnumerable<RecycleListing>>(key, out var cached) && cached is not null)
+            {
+                _logger.LogDebug("Returning search results from cache for city {CityId} (onlyActive={OnlyActive})", cityId, onlyActive);
+                return cached;
+            }
+
+            _logger.LogDebug("Searching listings: {@CityId}", cityId);
+            var query = _db.RecycleListings.AsNoTracking();
+
+            query = query.Where(l => l.CityId == cityId);
+            
+            if (onlyActive)
+            {
+                query = query.Where(l => l.IsActive && (l.Status == ListingStatus.Created || l.Status == ListingStatus.PendingAcceptance));
+            }
+
+            var list = await query
+                .OrderByDescending(l => l.CreatedAt)
+                .Include(l => l.Items)
+                .Include(l => l.Images)
+                .ToListAsync(ct);
+
+            _logger.LogDebug("Search returned {Count} listings", list.Count);
+            _cache.Set(key, list, ListingsCacheTtl);
+            return list;
         }
     }
 }
