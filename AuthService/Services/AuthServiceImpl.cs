@@ -110,13 +110,15 @@ namespace AuthService.Services
             // Fallbacks in case normalized fields are not populated (e.g., test providers)
             if (user is null)
             {
+                var idUpper = identifier.ToUpperInvariant();
                 user = await userManager.Users.Include(u => u.City)
-                    .FirstOrDefaultAsync(u => u.Email != null && u.Email.Equals(identifier, StringComparison.OrdinalIgnoreCase), ct);
+                    .FirstOrDefaultAsync(u => u.Email != null && u.Email.ToUpper() == idUpper, ct);
             }
             if (user is null)
             {
+                var idUpper = identifier.ToUpperInvariant();
                 user = await userManager.Users.Include(u => u.City)
-                    .FirstOrDefaultAsync(u => u.UserName != null && u.UserName.Equals(identifier, StringComparison.OrdinalIgnoreCase), ct);
+                    .FirstOrDefaultAsync(u => u.UserName != null && u.UserName.ToUpper() == idUpper, ct);
             }
 
             if (user == null)
