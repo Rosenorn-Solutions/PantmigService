@@ -118,7 +118,7 @@ namespace AuthService.Services
             {
                 var idUpper = identifier.ToUpperInvariant();
                 user = await userManager.Users.Include(u => u.City)
-                    .FirstOrDefaultAsync(u => u.UserName != null && u.UserName.ToUpper() == idUpper, ct);
+                    .FirstOrDefaultAsync(u => u.UserName != null && u.UserName.ToUpperInvariant() == idUpper, ct);
             }
 
             if (user == null)
