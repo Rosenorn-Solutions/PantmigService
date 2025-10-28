@@ -120,11 +120,14 @@ namespace AuthService.Endpoints
 
                 try
                 {
-                    var token = await userManager.GenerateEmailConfirmationTokenAsync(user);
+                    // Re-load a fresh user instance to ensure token providers have all required fields (e.g., SecurityStamp)
+                    var userForEmail = await userManager.FindByIdAsync(user.Id) ?? user;
+
+                    var token = await userManager.GenerateEmailConfirmationTokenAsync(userForEmail);
                     var tokenBytes = System.Text.Encoding.UTF8.GetBytes(token);
                     var tokenEnc = Microsoft.AspNetCore.WebUtilities.WebEncoders.Base64UrlEncode(tokenBytes);
                     var baseUrl = "https://auth.pantmig.dk";
-                    var confirmUrl = $"{baseUrl.TrimEnd('/')}/auth/confirm-email?userId={Uri.EscapeDataString(user.Id)}&token={tokenEnc}";
+                    var confirmUrl = $"{baseUrl.TrimEnd('/')}/auth/confirm-email?userId={Uri.EscapeDataString(userForEmail.Id)}&token={tokenEnc}";
 
                     var subject = "Bekræft din e-mail til PantMig";
                     var body = $"Hej {user.FirstName},\n\nTak for din registrering. Bekræft venligst din e-mail ved at klikke på linket:\n{confirmUrl}\n\nHvis du ikke har oprettet en konto, kan du ignorere denne mail.";
