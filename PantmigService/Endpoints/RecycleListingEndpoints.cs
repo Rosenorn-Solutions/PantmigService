@@ -21,7 +21,7 @@ namespace PantmigService.Endpoints
         public record MeetingPointRequest(int ListingId, decimal Latitude, decimal Longitude);
         public record CancelRequest(int ListingId);
         public record SearchRequest(int CityId, bool OnlyActive = true);
-        public record PagedSearchRequest<T>(int CityId, int Page = 1, int PageSize = 20, bool OnlyActive = true);
+        public record PagedSearchRequest<T>(int CityId, int Page =1, int PageSize =20, bool OnlyActive = true);
 
         public static IEndpointRouteBuilder MapRecycleListingEndpoints(this IEndpointRouteBuilder app)
         {
@@ -36,9 +36,9 @@ namespace PantmigService.Endpoints
                 {
                     var p = page.GetValueOrDefault(1);
                     var ps = pageSize.GetValueOrDefault(20);
-                    if (p <= 0) p = 1;
-                    if (ps <= 0) ps = 20;
-                    if (ps > 100) ps = 100;
+                    if (p <=0) p =1;
+                    if (ps <=0) ps =20;
+                    if (ps >100) ps =100;
                     var data = await svc.GetActivePagedAsync(p, ps, ctx.RequestAborted);
                     var dto = data.Map(l => l.ToResponse());
                     return Results.Ok(dto);
@@ -65,20 +65,26 @@ namespace PantmigService.Endpoints
             .Produces<PagedResult<RecycleListingResponse>>(StatusCodes.Status200OK, contentType: "application/json");
 
             // New: generic search endpoint using PagedSearchRequest
-            group.MapPost("/search", async (PagedSearchRequest<object> req, IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx) =>
+            group.MapPost("/search", async (PagedSearchRequest<object> req, ClaimsPrincipal user, IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx) =>
             {
                 var logger = lf.CreateLogger("Listings");
                 try
                 {
-                    if (req.CityId <= 0)
+                    if (req.CityId <=0)
                     {
                         return Results.Problem(title: "Invalid search", detail: "cityId must be a positive integer.", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
                     }
 
-                    var pageVal = req.Page <= 0 ? 1 : req.Page;
-                    var pageSizeVal = req.PageSize <= 0 ? 20 : Math.Min(req.PageSize, 100);
+                    var userId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+                    if (string.IsNullOrEmpty(userId))
+                    {
+                        return Results.Unauthorized();
+                    }
 
-                    var result = await svc.SearchAsync(req.CityId, pageVal, pageSizeVal, req.OnlyActive, ctx.RequestAborted);
+                    var pageVal = req.Page <=0 ?1 : req.Page;
+                    var pageSizeVal = req.PageSize <=0 ?20 : Math.Min(req.PageSize,100);
+
+                    var result = await svc.SearchAsync(req.CityId, userId, pageVal, pageSizeVal, req.OnlyActive, ctx.RequestAborted);
                     var mapped = result.Map(l => l.ToResponse());
                     return Results.Ok(mapped);
                 }
@@ -94,7 +100,7 @@ namespace PantmigService.Endpoints
             {
                 op.OperationId = "Listings_Search";
                 op.Summary = "Search listings";
-                op.Description = "Search for listings with pagination. Filters: cityId (required), onlyActive (optional).";
+                op.Description = "Search for listings with pagination. Filters: cityId (required), onlyActive (optional). Results exclude listings that the current user has already applied for.";
                 op.RequestBody = new OpenApiRequestBody
                 {
                     Required = true,

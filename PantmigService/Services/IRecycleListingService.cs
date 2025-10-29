@@ -23,6 +23,6 @@ namespace PantmigService.Services
         Task<bool> SetMeetingPointAsync(int id, string donatorUserId, decimal latitude, decimal longitude, CancellationToken ct = default);
         Task<bool> CancelAsync(int id, string donatorUserId, CancellationToken ct = default);
         Task<IEnumerable<RecycleListing>> SearchAsync(int cityId, bool onlyActive = true, CancellationToken ct = default);
-        Task<PagedResult<RecycleListing>> SearchAsync(int cityId, int page, int pageSize, bool onlyActive = true, CancellationToken ct = default);
+        Task<PagedResult<RecycleListing>> SearchAsync(int cityId, string userId, int page, int pageSize, bool onlyActive = true, CancellationToken ct = default);
     }
 }

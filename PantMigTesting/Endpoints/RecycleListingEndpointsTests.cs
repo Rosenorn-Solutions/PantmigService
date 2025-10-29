@@ -423,5 +423,34 @@ namespace PantMigTesting.Endpoints
             Assert.Contains(results!.Items, x => x.Id == l1.Id);
             Assert.Contains(results!.Items, x => x.Id == l2!.Id);
         }
+
+        [Fact]
+        public async Task Search_Endpoint_Excludes_Listings_Already_Applied_By_User()
+        {
+            using var server = TestHostBuilder.CreateServer();
+            using var client = server.CreateClient();
+
+            // Create two listings in same city
+            client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
+            var l1Resp = await client.PostAsJsonAsync("/listings", new { Title = "L1", Description = "desc", City = "CPH", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Items = new[] { new { Type =3, Quantity =5 } } });
+            l1Resp.EnsureSuccessStatusCode();
+            var l1 = await l1Resp.Content.ReadFromJsonAsync<RecycleListing>();
+            var l2Resp = await client.PostAsJsonAsync("/listings", new { Title = "L2", Description = "desc", City = "CPH", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Items = new[] { new { Type =3, Quantity =6 } } });
+            l2Resp.EnsureSuccessStatusCode();
+            var l2 = await l2Resp.Content.ReadFromJsonAsync<RecycleListing>();
+
+            // Recycler applies for l2
+            client.SetTestUser("recycler-1", userType: "Recycler", isMitIdVerified: true);
+            var pickup = await client.PostAsJsonAsync("/listings/pickup/request", new { ListingId = l2!.Id });
+            pickup.EnsureSuccessStatusCode();
+
+            // Search should exclude l2 for recycler-1
+            var searchResp = await client.PostAsJsonAsync("/listings/search", new { CityId = l1!.CityId });
+            searchResp.EnsureSuccessStatusCode();
+            var results = await searchResp.Content.ReadFromJsonAsync<Paged<RecycleListing>>();
+            Assert.NotNull(results);
+            Assert.Contains(results!.Items, x => x.Id == l1.Id);
+            Assert.DoesNotContain(results!.Items, x => x.Id == l2!.Id);
+        }
     }
 }
