@@ -16,14 +16,14 @@ namespace PantmigService.Services
         private static readonly TimeSpan ListingsCacheTtl = TimeSpan.FromSeconds(30);
         private static readonly TimeSpan ListingCacheTtl = TimeSpan.FromMinutes(5);
 
-        private const int MaxPageSize = 100;
+        private const int MaxPageSize =100;
 
         private string ActiveListingsCacheKey(int cityId) => $"listings:active:city:{cityId}";
         private string ActiveAllCacheKey(int page, int pageSize) => $"listings:active:all:p{page}:s{pageSize}";
         private string ListingCacheKey(int id) => $"listing:{id}";
         private string UserListingsCacheKey(string userId) => $"listings:user:{userId}";
         private string SearchCacheKey(int cityId, bool onlyActive) => $"listings:search:city:{cityId}:onlyActive:{onlyActive}";
-        private string SearchPageCacheKey(int cityId, int page, int pageSize, bool onlyActive) => $"listings:search:paged:city:{cityId}:page:{page}:size:{pageSize}:onlyActive:{onlyActive}";
+        private string SearchPageCacheKey(int cityId, string userId, int page, int pageSize, bool onlyActive) => $"listings:search:paged:city:{cityId}:user:{userId}:page:{page}:size:{pageSize}:onlyActive:{onlyActive}";
 
         public async Task<RecycleListing> CreateAsync(RecycleListing listing, CancellationToken ct = default)
         {
@@ -81,8 +81,8 @@ namespace PantmigService.Services
 
         public async Task<PagedResult<RecycleListing>> GetActivePagedAsync(int page, int pageSize, CancellationToken ct = default)
         {
-            if (page <= 0) page = 1;
-            if (pageSize <= 0) pageSize = 20;
+            if (page <=0) page =1;
+            if (pageSize <=0) pageSize =20;
             if (pageSize > MaxPageSize) pageSize = MaxPageSize;
 
             var key = ActiveAllCacheKey(page, pageSize);
@@ -100,7 +100,7 @@ namespace PantmigService.Services
                 .OrderByDescending(x => x.CreatedAt)
                 .Include(l => l.Items)
                 .Include(l => l.Images)
-                .Skip((page - 1) * pageSize)
+                .Skip((page -1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync(ct);
 
@@ -293,7 +293,7 @@ namespace PantmigService.Services
         public async Task<bool> SetMeetingPointAsync(int id, string donatorUserId, decimal latitude, decimal longitude, CancellationToken ct = default)
         {
             _logger.LogDebug("Setting meeting point for listing {ListingId} by donator {Donator} to ({Lat},{Lon})", id, donatorUserId, latitude, longitude);
-            if (latitude is < -90 or > 90 || longitude is < -180 or > 180)
+            if (latitude is < -90 or >90 || longitude is < -180 or >180)
             {
                 _logger.LogWarning("SetMeetingPoint failed: invalid coordinates for listing {ListingId}", id);
                 return false;
@@ -322,8 +322,8 @@ namespace PantmigService.Services
                 _logger.LogWarning("SetMeetingPoint failed: invalid status {Status} for listing {ListingId}", listing.Status, id);
                 return false;
             }
-            listing.MeetingLatitude = decimal.Round(latitude, 6);
-            listing.MeetingLongitude = decimal.Round(longitude, 6);
+            listing.MeetingLatitude = decimal.Round(latitude,6);
+            listing.MeetingLongitude = decimal.Round(longitude,6);
             listing.MeetingSetAt = DateTime.UtcNow;
             await _db.SaveChangesAsync(ct);
 
@@ -480,33 +480,35 @@ namespace PantmigService.Services
             return list;
         }
 
-        // New: paginated search
-        public async Task<PagedResult<RecycleListing>> SearchAsync(int cityId, int page, int pageSize, bool onlyActive = true, CancellationToken ct = default)
+        // New: paginated search with per-user filtering (exclude listings user already applied for)
+        public async Task<PagedResult<RecycleListing>> SearchAsync(int cityId, string userId, int page, int pageSize, bool onlyActive = true, CancellationToken ct = default)
         {
-            if (page <= 0) page = 1;
-            if (pageSize <= 0) pageSize = 20;
+            if (page <=0) page =1;
+            if (pageSize <=0) pageSize =20;
             if (pageSize > MaxPageSize) pageSize = MaxPageSize;
 
-            var key = SearchPageCacheKey(cityId, page, pageSize, onlyActive);
+            var key = SearchPageCacheKey(cityId, userId, page, pageSize, onlyActive);
             if (_cache.TryGetValue<PagedResult<RecycleListing>>(key, out var cached) && cached is not null)
             {
-                _logger.LogDebug("Returning paged search from cache for city {CityId} page {Page} size {Size}", cityId, page, pageSize);
+                _logger.LogDebug("Returning paged search from cache for city {CityId} user {UserId} page {Page} size {Size}", cityId, userId, page, pageSize);
                 return cached;
             }
 
-            _logger.LogDebug("Paged search listings city={CityId}, page={Page}, size={Size}, onlyActive={OnlyActive}", cityId, page, pageSize, onlyActive);
+            _logger.LogDebug("Paged search listings city={CityId}, user={UserId}, page={Page}, size={Size}, onlyActive={OnlyActive}", cityId, userId, page, pageSize, onlyActive);
             var baseQuery = _db.RecycleListings.AsNoTracking().Where(l => l.CityId == cityId);
             if (onlyActive)
             {
                 baseQuery = baseQuery.Where(l => l.IsActive && (l.Status == ListingStatus.Created || l.Status == ListingStatus.PendingAcceptance));
             }
+            // Exclude listings the user has already applied for
+            baseQuery = baseQuery.Where(l => !l.Applicants.Any(a => a.RecyclerUserId == userId));
 
             var total = await baseQuery.CountAsync(ct);
             var items = await baseQuery
                 .OrderByDescending(l => l.CreatedAt)
                 .Include(l => l.Items)
                 .Include(l => l.Images)
-                .Skip((page - 1) * pageSize)
+                .Skip((page -1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync(ct);
 
