@@ -452,5 +452,30 @@ namespace PantMigTesting.Endpoints
             Assert.Contains(results!.Items, x => x.Id == l1.Id);
             Assert.DoesNotContain(results!.Items, x => x.Id == l2!.Id);
         }
+
+        [Fact]
+        public async Task Create_With_Initial_Coordinates_Sets_Meeting_Fields()
+        {
+            using var server = TestHostBuilder.CreateServer();
+            using var client = server.CreateClient();
+
+            client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
+            var createResp = await client.PostAsJsonAsync("/listings", new
+            {
+                Title = "Cans",
+                Description = "Bag of cans",
+                City = "CPH",
+                AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow),
+                AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(2)),
+                Latitude =55.6761m,
+                Longitude =12.5683m,
+                Items = new[] { new { Type =3, Quantity =50 } }
+            });
+            createResp.EnsureSuccessStatusCode();
+            var listing = await createResp.Content.ReadFromJsonAsync<RecycleListingResponse>();
+            Assert.NotNull(listing);
+            Assert.Equal(55.6761m, listing!.MeetingPointLatitude);
+            Assert.Equal(12.5683m, listing!.MeetingPointLongtitude);
+        }
     }
 }

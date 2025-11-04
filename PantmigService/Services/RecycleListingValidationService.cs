@@ -13,6 +13,8 @@ public class RecycleListingValidationService : IRecycleListingValidationService
         DateOnly availableTo,
         TimeOnly? pickupTimeFrom,
         TimeOnly? pickupTimeTo,
+        decimal? latitude,
+        decimal? longitude,
         List<CreateListingItemInput>? items)
     {
         if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(description))
@@ -30,6 +32,19 @@ public class RecycleListingValidationService : IRecycleListingValidationService
 
         if (pickupTimeFrom.HasValue && pickupTimeTo.HasValue && pickupTimeTo <= pickupTimeFrom)
             return ValidationResult<CreateListingValidated>.Failure("Validation error", "pickupTimeTo must be after pickupTimeFrom", StatusCodes.Status400BadRequest);
+
+        // Validate coordinates if provided: both must be present and within range
+        var hasLat = latitude.HasValue;
+        var hasLon = longitude.HasValue;
+        if (hasLat ^ hasLon)
+            return ValidationResult<CreateListingValidated>.Failure("Validation error", "Both latitude and longitude must be supplied together", StatusCodes.Status400BadRequest);
+        if (hasLat && hasLon)
+        {
+            if (latitude is < -90 or > 90)
+                return ValidationResult<CreateListingValidated>.Failure("Validation error", "Latitude must be between -90 and 90", StatusCodes.Status400BadRequest);
+            if (longitude is < -180 or > 180)
+                return ValidationResult<CreateListingValidated>.Failure("Validation error", "Longitude must be between -180 and 180", StatusCodes.Status400BadRequest);
+        }
 
         if (items is null || items.Count == 0)
             return ValidationResult<CreateListingValidated>.Failure("Validation error", "At least one item is required", StatusCodes.Status400BadRequest);
@@ -62,6 +77,8 @@ public class RecycleListingValidationService : IRecycleListingValidationService
             availableTo,
             pickupTimeFrom,
             pickupTimeTo,
+            latitude,
+            longitude,
             items,
             estimatedValue));
     }
