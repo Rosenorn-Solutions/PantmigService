@@ -23,6 +23,9 @@ namespace PantmigService.Services
         Task<bool> SetMeetingPointAsync(int id, string donatorUserId, decimal latitude, decimal longitude, CancellationToken ct = default);
         Task<bool> CancelAsync(int id, string donatorUserId, CancellationToken ct = default);
         Task<IEnumerable<RecycleListing>> SearchAsync(int cityId, bool onlyActive = true, CancellationToken ct = default);
+        // Legacy paged search by city only
         Task<PagedResult<RecycleListing>> SearchAsync(int cityId, string userId, int page, int pageSize, bool onlyActive = true, CancellationToken ct = default);
+        // New paged search supporting optional cityId and/or coordinates (5km radius)
+        Task<PagedResult<RecycleListing>> SearchAsync(int? cityId, string userId, int page, int pageSize, bool onlyActive = true, decimal? latitude = null, decimal? longitude = null, CancellationToken ct = default);
     }
 }

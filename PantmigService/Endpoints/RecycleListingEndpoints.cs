@@ -21,7 +21,7 @@ namespace PantmigService.Endpoints
         public record MeetingPointRequest(int ListingId, decimal Latitude, decimal Longitude);
         public record CancelRequest(int ListingId);
         public record SearchRequest(int CityId, bool OnlyActive = true);
-        public record PagedSearchRequest<T>(int CityId, int Page = 1, int PageSize = 20, bool OnlyActive = true);
+        public record PagedSearchRequest<T>(int? CityId, int Page = 1, int PageSize = 20, bool OnlyActive = true, decimal? Latitude = null, decimal? Longitude = null);
 
         public static IEndpointRouteBuilder MapRecycleListingEndpoints(this IEndpointRouteBuilder app)
         {
@@ -64,15 +64,29 @@ namespace PantmigService.Endpoints
             .RequireAuthorization()
             .Produces<PagedResult<RecycleListingResponse>>(StatusCodes.Status200OK, contentType: "application/json");
 
-            // New: generic search endpoint using PagedSearchRequest
+            // Updated search endpoint: supports optional cityId and/or coordinates
             group.MapPost("/search", async (PagedSearchRequest<object> req, ClaimsPrincipal user, IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx) =>
             {
                 var logger = lf.CreateLogger("Listings");
                 try
                 {
-                    if (req.CityId <= 0)
+                    if (!req.CityId.HasValue && (!req.Latitude.HasValue || !req.Longitude.HasValue))
                     {
-                        return Results.Problem(title: "Invalid search", detail: "cityId must be a positive integer.", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
+                        return Results.Problem(title: "Invalid search", detail: "Provide either cityId or both latitude and longitude.", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
+                    }
+
+                    if ((req.Latitude.HasValue && !req.Longitude.HasValue) || (!req.Latitude.HasValue && req.Longitude.HasValue))
+                    {
+                        return Results.Problem(title: "Invalid search", detail: "Both latitude and longitude must be provided for coordinate search.", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
+                    }
+
+                    if (req.Latitude.HasValue && (req.Latitude < -90 || req.Latitude > 90))
+                    {
+                        return Results.Problem(title: "Invalid search", detail: "Latitude must be between -90 and90.", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
+                    }
+                    if (req.Longitude.HasValue && (req.Longitude < -180 || req.Longitude > 180))
+                    {
+                        return Results.Problem(title: "Invalid search", detail: "Longitude must be between -180 and180.", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
                     }
 
                     var userId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
@@ -84,7 +98,7 @@ namespace PantmigService.Endpoints
                     var pageVal = req.Page <= 0 ? 1 : req.Page;
                     var pageSizeVal = req.PageSize <= 0 ? 20 : Math.Min(req.PageSize, 100);
 
-                    var result = await svc.SearchAsync(req.CityId, userId, pageVal, pageSizeVal, req.OnlyActive, ctx.RequestAborted);
+                    var result = await svc.SearchAsync(req.CityId, userId, pageVal, pageSizeVal, req.OnlyActive, req.Latitude, req.Longitude, ctx.RequestAborted);
                     var mapped = result.Map(l => l.ToResponse());
                     return Results.Ok(mapped);
                 }
@@ -100,28 +114,29 @@ namespace PantmigService.Endpoints
             {
                 op.OperationId = "Listings_Search";
                 op.Summary = "Search listings";
-                op.Description = "Search for listings with pagination. Filters: cityId (required), onlyActive (optional). Results exclude listings that the current user has already applied for.";
+                op.Description = "Search for listings with pagination. Filters: cityId (optional) and/or coordinates (latitude+longitude within5km). Results exclude listings that the current user has already applied for.";
                 op.RequestBody = new OpenApiRequestBody
                 {
                     Required = true,
                     Content =
-            {
- ["application/json"] = new OpenApiMediaType
- {
- Schema = new OpenApiSchema
- {
- Type = "object",
- Required = { nameof(PagedSearchRequest<object>.CityId) },
- Properties =
- {
- [nameof(PagedSearchRequest<object>.CityId)] = new OpenApiSchema { Type = "integer", Format = "int32", Description = "City identifier" },
- [nameof(PagedSearchRequest<object>.OnlyActive)] = new OpenApiSchema { Type = "boolean", Description = "If true, returns only active listings in Created or PendingAcceptance states.", Default = new Microsoft.OpenApi.Any.OpenApiBoolean(true) },
- [nameof(PagedSearchRequest<object>.Page)] = new OpenApiSchema { Type = "integer", Format = "int32", Description = "Page number (1-based)", Default = new Microsoft.OpenApi.Any.OpenApiInteger(1) },
- [nameof(PagedSearchRequest<object>.PageSize)] = new OpenApiSchema { Type = "integer", Format = "int32", Description = "Page size (max100)", Default = new Microsoft.OpenApi.Any.OpenApiInteger(20) }
- }
- }
- }
-            }
+                {
+                     ["application/json"] = new OpenApiMediaType
+                     {
+                        Schema = new OpenApiSchema
+                     {
+                     Type = "object",
+                        Properties =
+                        {
+                             [nameof(PagedSearchRequest<object>.CityId)] = new OpenApiSchema { Type = "integer", Format = "int32", Nullable = true, Description = "City identifier (optional)" },
+                             [nameof(PagedSearchRequest<object>.OnlyActive)] = new OpenApiSchema { Type = "boolean", Description = "If true, returns only active listings in Created or PendingAcceptance states.", Default = new Microsoft.OpenApi.Any.OpenApiBoolean(true) },
+                             [nameof(PagedSearchRequest<object>.Page)] = new OpenApiSchema { Type = "integer", Format = "int32", Description = "Page number (1-based)", Default = new Microsoft.OpenApi.Any.OpenApiInteger(1) },
+                             [nameof(PagedSearchRequest<object>.PageSize)] = new OpenApiSchema { Type = "integer", Format = "int32", Description = "Page size (max100)", Default = new Microsoft.OpenApi.Any.OpenApiInteger(20) },
+                             [nameof(PagedSearchRequest<object>.Latitude)] = new OpenApiSchema { Type = "number", Format = "decimal", Nullable = true, Description = "Latitude for coordinate search (-90..90)" },
+                             [nameof(PagedSearchRequest<object>.Longitude)] = new OpenApiSchema { Type = "number", Format = "decimal", Nullable = true, Description = "Longitude for coordinate search (-180..180)" }
+                        }
+                     }
+                     }
+                }
                 };
                 return op;
             })
@@ -263,12 +278,12 @@ namespace PantmigService.Endpoints
                         Status = ListingStatus.Created,
                         CityId = cityId,
                         Items = [.. v.Items.Select(i => new RecycleListingItem
-                         {
-                         MaterialType = i.Type,
-                         Quantity = i.Quantity,
-                         DepositClass = i.DepositClass,
-                         EstimatedDepositPerUnit = i.EstimatedDepositPerUnit
-                         })],
+                        {
+                             MaterialType = i.Type,
+                             Quantity = i.Quantity,
+                             DepositClass = i.DepositClass,
+                             EstimatedDepositPerUnit = i.EstimatedDepositPerUnit
+                        })],
                         Images = parseResult.Images,
                         MeetingLatitude = v.Latitude,
                         MeetingLongitude = v.Longitude,
@@ -297,51 +312,51 @@ namespace PantmigService.Endpoints
                 {
                     Required = true,
                     Content =
-            {
- ["application/json"] = new OpenApiMediaType
- {
- Schema = new OpenApiSchema
- {
- Reference = new OpenApiReference
- {
- Type = ReferenceType.Schema,
- Id = nameof(CreateRecycleListingRequest)
- }
- }
- },
- ["multipart/form-data"] = new OpenApiMediaType
- {
- Schema = new OpenApiSchema
- {
- Type = "object",
- Required = { "title", "description", "city", "availableFrom", "availableTo" },
- Properties =
- {
- ["title"] = new OpenApiSchema { Type = "string" },
- ["description"] = new OpenApiSchema { Type = "string" },
- ["city"] = new OpenApiSchema { Type = "string" },
- ["location"] = new OpenApiSchema { Type = "string", Nullable = true },
- ["availableFrom"] = new OpenApiSchema { Type = "string", Format = "date" },
- ["availableTo"] = new OpenApiSchema { Type = "string", Format = "date" },
- ["pickupTimeFrom"] = new OpenApiSchema { Type = "string", Format = "time", Nullable = true },
- ["pickupTimeTo"] = new OpenApiSchema { Type = "string", Format = "time", Nullable = true },
- ["latitude"] = new OpenApiSchema { Type = "number", Format = "decimal", Nullable = true, Description = "Initial meeting point latitude (-90..90)" },
- ["longitude"] = new OpenApiSchema { Type = "number", Format = "decimal", Nullable = true, Description = "Initial meeting point longitude (-180..180)" },
- ["items"] = new OpenApiSchema
- {
- Description = "JSON array of items example: [{\"type\":1,\"quantity\":10}]",
- Type = "string"
- },
- ["images"] = new OpenApiSchema
- {
- Type = "array",
- Items = new OpenApiSchema { Type = "string", Format = "binary" },
- Description = "Zero or more images (PNG/JPEG). Max6 images, each <=5 MB."
- }
- }
- }
- }
-            }
+                    {
+                         ["application/json"] = new OpenApiMediaType
+                         {
+                            Schema = new OpenApiSchema
+                         {
+                            Reference = new OpenApiReference
+                            {
+                                Type = ReferenceType.Schema,
+                                Id = nameof(CreateRecycleListingRequest)
+                            }
+                         }
+                         },
+                             ["multipart/form-data"] = new OpenApiMediaType
+                                {
+                                    Schema = new OpenApiSchema
+                                {
+                             Type = "object",
+                             Required = { "title", "description", "city", "availableFrom", "availableTo" },
+                                 Properties =
+                                 {
+                                 ["title"] = new OpenApiSchema { Type = "string" },
+                                 ["description"] = new OpenApiSchema { Type = "string" },
+                                 ["city"] = new OpenApiSchema { Type = "string" },
+                                 ["location"] = new OpenApiSchema { Type = "string", Nullable = true },
+                                 ["availableFrom"] = new OpenApiSchema { Type = "string", Format = "date" },
+                                 ["availableTo"] = new OpenApiSchema { Type = "string", Format = "date" },
+                                 ["pickupTimeFrom"] = new OpenApiSchema { Type = "string", Format = "time", Nullable = true },
+                                 ["pickupTimeTo"] = new OpenApiSchema { Type = "string", Format = "time", Nullable = true },
+                                 ["latitude"] = new OpenApiSchema { Type = "number", Format = "decimal", Nullable = true, Description = "Initial meeting point latitude (-90..90)" },
+                                 ["longitude"] = new OpenApiSchema { Type = "number", Format = "decimal", Nullable = true, Description = "Initial meeting point longitude (-180..180)" },
+                                 ["items"] = new OpenApiSchema
+                                 {
+                                 Description = "JSON array of items example: [{\"type\":1,\"quantity\":10}]",
+                                 Type = "string"
+                                 },
+                             ["images"] = new OpenApiSchema
+                             {
+                             Type = "array",
+                             Items = new OpenApiSchema { Type = "string", Format = "binary" },
+                             Description = "Zero or more images (PNG/JPEG). Max6 images, each <=5 MB."
+                             }
+                             }
+                             }
+                         }
+                    }
                 };
                 return op;
             })
