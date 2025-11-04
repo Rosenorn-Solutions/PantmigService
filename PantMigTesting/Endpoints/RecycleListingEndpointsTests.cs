@@ -452,5 +452,84 @@ namespace PantMigTesting.Endpoints
             Assert.Contains(results!.Items, x => x.Id == l1.Id);
             Assert.DoesNotContain(results!.Items, x => x.Id == l2!.Id);
         }
+
+        [Fact]
+        public async Task Create_With_Initial_Coordinates_Sets_Meeting_Fields()
+        {
+            using var server = TestHostBuilder.CreateServer();
+            using var client = server.CreateClient();
+
+            client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
+            var createResp = await client.PostAsJsonAsync("/listings", new
+            {
+                Title = "Cans",
+                Description = "Bag of cans",
+                City = "CPH",
+                AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow),
+                AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(2)),
+                Latitude =55.6761m,
+                Longitude =12.5683m,
+                Items = new[] { new { Type =3, Quantity =50 } }
+            });
+            createResp.EnsureSuccessStatusCode();
+            var listing = await createResp.Content.ReadFromJsonAsync<RecycleListingResponse>();
+            Assert.NotNull(listing);
+            Assert.Equal(55.6761m, listing!.MeetingPointLatitude);
+            Assert.Equal(12.5683m, listing!.MeetingPointLongtitude);
+        }
+
+        [Fact]
+        public async Task Search_By_Coordinates_Only_Returns_Within_5km()
+        {
+            using var server = TestHostBuilder.CreateServer();
+            using var client = server.CreateClient();
+            client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
+
+            // Create two listings with coordinates: one near, one far
+            var near = await client.PostAsJsonAsync("/listings", new { Title = "Near", Description = "desc", City = "CPH", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Latitude =55.6761m, Longitude =12.5683m, Items = new[] { new { Type =3, Quantity =1 } } });
+            near.EnsureSuccessStatusCode();
+            _ = await near.Content.ReadFromJsonAsync<RecycleListing>();
+
+            var far = await client.PostAsJsonAsync("/listings", new { Title = "Far", Description = "desc", City = "CPH", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Latitude =55.0m, Longitude =12.0m, Items = new[] { new { Type =3, Quantity =1 } } });
+            far.EnsureSuccessStatusCode();
+            _ = await far.Content.ReadFromJsonAsync<RecycleListing>();
+
+            // Search with coordinates near Copenhagen
+            client.SetTestUser("recycler-1", userType: "Recycler", isMitIdVerified: true);
+            var search = await client.PostAsJsonAsync("/listings/search", new { Latitude =55.6761m, Longitude =12.5683m });
+            search.EnsureSuccessStatusCode();
+            var results = await search.Content.ReadFromJsonAsync<Paged<RecycleListing>>();
+            Assert.NotNull(results);
+            Assert.Contains(results!.Items, x => x.Title == "Near");
+            // The far one should be filtered by bounding box and distance approx; with bounding box only, it's already far enough
+            Assert.DoesNotContain(results!.Items, x => x.Title == "Far");
+        }
+
+        [Fact]
+        public async Task Search_By_City_And_Coordinates_Unions_Results()
+        {
+            using var server = TestHostBuilder.CreateServer();
+            using var client = server.CreateClient();
+            client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
+
+            // Create one listing in CPH without coordinates
+            var cph = await client.PostAsJsonAsync("/listings", new { Title = "CityOnly", Description = "desc", City = "CPH", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Items = new[] { new { Type =3, Quantity =1 } } });
+            cph.EnsureSuccessStatusCode();
+            var cphListing = await cph.Content.ReadFromJsonAsync<RecycleListing>();
+
+            // Another listing in other city but near coordinates
+            var aal = await client.PostAsJsonAsync("/listings", new { Title = "NearCoord", Description = "desc", City = "Aalborg", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Latitude =55.6762m, Longitude =12.5684m, Items = new[] { new { Type =3, Quantity =1 } } });
+            aal.EnsureSuccessStatusCode();
+            _ = await aal.Content.ReadFromJsonAsync<RecycleListing>();
+
+            // Search for CPH cityId plus coordinates near Copenhagen
+            client.SetTestUser("recycler-1", userType: "Recycler", isMitIdVerified: true);
+            var search = await client.PostAsJsonAsync("/listings/search", new { CityId = cphListing!.CityId, Latitude =55.6761m, Longitude =12.5683m });
+            search.EnsureSuccessStatusCode();
+            var results = await search.Content.ReadFromJsonAsync<Paged<RecycleListing>>();
+            Assert.NotNull(results);
+            Assert.Contains(results!.Items, x => x.Title == "CityOnly");
+            Assert.Contains(results!.Items, x => x.Title == "NearCoord");
+        }
     }
 }

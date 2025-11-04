@@ -40,6 +40,13 @@ public class CreateListingRequestParser : ICreateListingRequestParser
             if (TimeOnly.TryParse(form["PickupTimeTo"].FirstOrDefault() ?? form["pickupTimeTo"].FirstOrDefault(), out var tTo))
                 pickupTo = tTo;
 
+            decimal? latitude = null;
+            decimal? longitude = null;
+            if (decimal.TryParse(form["Latitude"].FirstOrDefault() ?? form["latitude"].FirstOrDefault(), out var lat))
+                latitude = lat;
+            if (decimal.TryParse(form["Longitude"].FirstOrDefault() ?? form["longitude"].FirstOrDefault(), out var lon))
+                longitude = lon;
+
             List<RecycleListingEndpoints.CreateRecycleListingItemRequest>? rawItems = null;
             var itemsJson = form["Items"].FirstOrDefault() ?? form["items"].FirstOrDefault();
             if (!string.IsNullOrWhiteSpace(itemsJson))
@@ -105,6 +112,8 @@ public class CreateListingRequestParser : ICreateListingRequestParser
                 AvailableTo = availableTo,
                 PickupTimeFrom = pickupFrom,
                 PickupTimeTo = pickupTo,
+                Latitude = latitude,
+                Longitude = longitude,
                 RawItems = rawItems,
                 Images = images
             };
@@ -128,6 +137,8 @@ public class CreateListingRequestParser : ICreateListingRequestParser
                     AvailableTo = body.AvailableTo,
                     PickupTimeFrom = body.PickupTimeFrom,
                     PickupTimeTo = body.PickupTimeTo,
+                    Latitude = body.Latitude,
+                    Longitude = body.Longitude,
                     RawItems = body.Items
                 };
             }

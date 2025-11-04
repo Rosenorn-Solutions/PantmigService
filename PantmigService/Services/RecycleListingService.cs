@@ -17,13 +17,15 @@ namespace PantmigService.Services
         private static readonly TimeSpan ListingCacheTtl = TimeSpan.FromMinutes(5);
 
         private const int MaxPageSize =100;
+        private const double EarthRadiusKm =6371.0088; // mean Earth radius
+        private const double SearchRadiusKm =5.0;
 
         private string ActiveListingsCacheKey(int cityId) => $"listings:active:city:{cityId}";
         private string ActiveAllCacheKey(int page, int pageSize) => $"listings:active:all:p{page}:s{pageSize}";
         private string ListingCacheKey(int id) => $"listing:{id}";
         private string UserListingsCacheKey(string userId) => $"listings:user:{userId}";
         private string SearchCacheKey(int cityId, bool onlyActive) => $"listings:search:city:{cityId}:onlyActive:{onlyActive}";
-        private string SearchPageCacheKey(int cityId, string userId, int page, int pageSize, bool onlyActive) => $"listings:search:paged:city:{cityId}:user:{userId}:page:{page}:size:{pageSize}:onlyActive:{onlyActive}";
+        private string SearchPageCacheKey(int? cityId, string userId, int page, int pageSize, bool onlyActive, decimal? lat, decimal? lon) => $"listings:search:paged:city:{cityId?.ToString() ?? "_"}:user:{userId}:page:{page}:size:{pageSize}:onlyActive:{onlyActive}:lat:{lat?.ToString() ?? "_"}:lon:{lon?.ToString() ?? "_"}";
 
         public async Task<RecycleListing> CreateAsync(RecycleListing listing, CancellationToken ct = default)
         {
@@ -480,31 +482,78 @@ namespace PantmigService.Services
             return list;
         }
 
-        // New: paginated search with per-user filtering (exclude listings user already applied for)
-        public async Task<PagedResult<RecycleListing>> SearchAsync(int cityId, string userId, int page, int pageSize, bool onlyActive = true, CancellationToken ct = default)
+        // Legacy: paginated search by cityId only (kept for compatibility)
+        public Task<PagedResult<RecycleListing>> SearchAsync(int cityId, string userId, int page, int pageSize, bool onlyActive = true, CancellationToken ct = default)
+        => SearchAsync((int?)cityId, userId, page, pageSize, onlyActive, null, null, ct);
+
+        // New: paginated search with city and/or coordinates, exclude listings user already applied for
+        public async Task<PagedResult<RecycleListing>> SearchAsync(int? cityId, string userId, int page, int pageSize, bool onlyActive = true, decimal? latitude = null, decimal? longitude = null, CancellationToken ct = default)
         {
             if (page <=0) page =1;
             if (pageSize <=0) pageSize =20;
             if (pageSize > MaxPageSize) pageSize = MaxPageSize;
 
-            var key = SearchPageCacheKey(cityId, userId, page, pageSize, onlyActive);
+            var key = SearchPageCacheKey(cityId, userId, page, pageSize, onlyActive, latitude, longitude);
             if (_cache.TryGetValue<PagedResult<RecycleListing>>(key, out var cached) && cached is not null)
             {
-                _logger.LogDebug("Returning paged search from cache for city {CityId} user {UserId} page {Page} size {Size}", cityId, userId, page, pageSize);
+                _logger.LogDebug("Returning paged search from cache for city {CityId} user {UserId} page {Page} size {Size} lat {Lat} lon {Lon}", cityId, userId, page, pageSize, latitude, longitude);
                 return cached;
             }
 
-            _logger.LogDebug("Paged search listings city={CityId}, user={UserId}, page={Page}, size={Size}, onlyActive={OnlyActive}", cityId, userId, page, pageSize, onlyActive);
-            var baseQuery = _db.RecycleListings.AsNoTracking().Where(l => l.CityId == cityId);
+            IQueryable<RecycleListing> baseQuery = _db.RecycleListings.AsNoTracking();
+
+            // Base active filter
             if (onlyActive)
-            {
                 baseQuery = baseQuery.Where(l => l.IsActive && (l.Status == ListingStatus.Created || l.Status == ListingStatus.PendingAcceptance));
-            }
-            // Exclude listings the user has already applied for
+
+            // Exclude listings already applied by the user
             baseQuery = baseQuery.Where(l => !l.Applicants.Any(a => a.RecyclerUserId == userId));
 
-            var total = await baseQuery.CountAsync(ct);
-            var items = await baseQuery
+            // Build city subset
+            IQueryable<RecycleListing>? cityQuery = null;
+            if (cityId.HasValue && cityId.Value >0)
+                cityQuery = baseQuery.Where(l => l.CityId == cityId.Value);
+
+            // Build coordinate subset (5km radius) using bounding box
+            IQueryable<RecycleListing>? coordQuery = null;
+            if (latitude.HasValue && longitude.HasValue)
+            {
+                var lat = (double)latitude.Value;
+                var lon = (double)longitude.Value;
+                var latDelta = (SearchRadiusKm / EarthRadiusKm) * (180.0 / Math.PI);
+                var lonDelta = (SearchRadiusKm / (EarthRadiusKm * Math.Cos(lat * Math.PI /180.0))) * (180.0 / Math.PI);
+                var minLat = lat - latDelta;
+                var maxLat = lat + latDelta;
+                var minLon = lon - lonDelta;
+                var maxLon = lon + lonDelta;
+
+                coordQuery = baseQuery.Where(l => l.MeetingLatitude.HasValue && l.MeetingLongitude.HasValue
+                                                   && (double)l.MeetingLatitude.Value >= minLat && (double)l.MeetingLatitude.Value <= maxLat
+                                                   && (double)l.MeetingLongitude.Value >= minLon && (double)l.MeetingLongitude.Value <= maxLon);
+            }
+
+            // Union logic: if both provided, combine city results and coordinate results; else use whichever provided
+            IQueryable<RecycleListing> unionQuery;
+            if (cityQuery is not null && coordQuery is not null)
+            {
+                unionQuery = cityQuery.Union(coordQuery);
+            }
+            else if (cityQuery is not null)
+            {
+                unionQuery = cityQuery;
+            }
+            else if (coordQuery is not null)
+            {
+                unionQuery = coordQuery;
+            }
+            else
+            {
+                // Should not happen due to endpoint validation, but safeguard
+                return new PagedResult<RecycleListing>([],0, page, pageSize);
+            }
+
+            var total = await unionQuery.CountAsync(ct);
+            var items = await unionQuery
                 .OrderByDescending(l => l.CreatedAt)
                 .Include(l => l.Items)
                 .Include(l => l.Images)
