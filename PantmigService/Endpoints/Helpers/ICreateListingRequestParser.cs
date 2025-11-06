@@ -16,8 +16,6 @@ public class ParseCreateListingResult
     public string? Location { get; init; }
     public DateOnly AvailableFrom { get; init; }
     public DateOnly AvailableTo { get; init; }
-    public TimeOnly? PickupTimeFrom { get; init; }
-    public TimeOnly? PickupTimeTo { get; init; }
     public decimal? Latitude { get; init; }
     public decimal? Longitude { get; init; }
     public List<RecycleListingEndpoints.CreateRecycleListingItemRequest>? RawItems { get; init; }

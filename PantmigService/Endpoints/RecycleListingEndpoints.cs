@@ -13,7 +13,7 @@ namespace PantmigService.Endpoints
     public static class RecycleListingEndpoints
     {
         public record CreateRecycleListingItemRequest(RecycleMaterialType Type, int Quantity, string? DepositClass, decimal? EstimatedDepositPerUnit);
-        public record CreateRecycleListingRequest(string Title, string Description, string? City, string? Location, DateOnly AvailableFrom, DateOnly AvailableTo, TimeOnly? PickupTimeFrom, TimeOnly? PickupTimeTo, decimal? Latitude, decimal? Longitude, List<CreateRecycleListingItemRequest> Items);
+        public record CreateRecycleListingRequest(string Title, string Description, string? City, string? Location, DateOnly AvailableFrom, DateOnly AvailableTo, decimal? Latitude, decimal? Longitude, List<CreateRecycleListingItemRequest> Items);
         public record PickupRequest(int ListingId);
         public record AcceptRequest(int ListingId, string RecyclerUserId);
         public record ChatStartRequest(int ListingId);
@@ -254,7 +254,7 @@ namespace PantmigService.Endpoints
 
                     var rawItems = parseResult.RawItems;
                     var itemInputs = rawItems?.Select(i => new CreateListingItemInput(i.Type, i.Quantity, i.DepositClass, i.EstimatedDepositPerUnit)).ToList();
-                    var validation = validator.ValidateCreate(parseResult.Title, parseResult.Description, parseResult.City, parseResult.Location, parseResult.AvailableFrom, parseResult.AvailableTo, parseResult.PickupTimeFrom, parseResult.PickupTimeTo, parseResult.Latitude, parseResult.Longitude, itemInputs);
+                    var validation = validator.ValidateCreate(parseResult.Title, parseResult.Description, parseResult.City, parseResult.Location, parseResult.AvailableFrom, parseResult.AvailableTo, parseResult.Latitude, parseResult.Longitude, itemInputs);
                     if (!validation.IsValid)
                     {
                         var vp = validation.Problem!;
@@ -270,8 +270,6 @@ namespace PantmigService.Endpoints
                         Description = v.Description,
                         AvailableFrom = v.AvailableFrom,
                         AvailableTo = v.AvailableTo,
-                        PickupTimeFrom = v.PickupTimeFrom,
-                        PickupTimeTo = v.PickupTimeTo,
                         CreatedByUserId = userId,
                         CreatedAt = DateTime.UtcNow,
                         IsActive = true,
@@ -306,7 +304,7 @@ namespace PantmigService.Endpoints
             {
                 op.OperationId = "Listings_Create";
                 op.Summary = "Create a new listing";
-                op.Description = "Creates a new recycle listing with structured item contents. Supports either JSON body (application/json) or multipart/form-data (fields: title, description, city, availableFrom, availableTo, optional pickupTimeFrom/pickupTimeTo, optional latitude/longitude, items as JSON string, images as image/*). Requires a verified Donator.";
+                op.Description = "Creates a new recycle listing with structured item contents. Supports either JSON body (application/json) or multipart/form-data (fields: title, description, city, availableFrom, availableTo, optional latitude/longitude, items as JSON string, images as image/*). Requires a verified Donator.";
 
                 op.RequestBody = new OpenApiRequestBody
                 {
@@ -338,8 +336,6 @@ namespace PantmigService.Endpoints
                                  ["location"] = new OpenApiSchema { Type = "string", Nullable = true },
                                  ["availableFrom"] = new OpenApiSchema { Type = "string", Format = "date" },
                                  ["availableTo"] = new OpenApiSchema { Type = "string", Format = "date" },
-                                 ["pickupTimeFrom"] = new OpenApiSchema { Type = "string", Format = "time", Nullable = true },
-                                 ["pickupTimeTo"] = new OpenApiSchema { Type = "string", Format = "time", Nullable = true },
                                  ["latitude"] = new OpenApiSchema { Type = "number", Format = "decimal", Nullable = true, Description = "Initial meeting point latitude (-90..90)" },
                                  ["longitude"] = new OpenApiSchema { Type = "number", Format = "decimal", Nullable = true, Description = "Initial meeting point longitude (-180..180)" },
                                  ["items"] = new OpenApiSchema

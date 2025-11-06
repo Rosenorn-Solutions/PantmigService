@@ -26,8 +26,6 @@ public record CreateListingValidated(
     string CityInput,
     DateOnly AvailableFrom,
     DateOnly AvailableTo,
-    TimeOnly? PickupTimeFrom,
-    TimeOnly? PickupTimeTo,
     decimal? Latitude,
     decimal? Longitude,
     List<CreateListingItemInput> Items,
@@ -42,8 +40,6 @@ public interface IRecycleListingValidationService
         string? location,
         DateOnly availableFrom,
         DateOnly availableTo,
-        TimeOnly? pickupTimeFrom,
-        TimeOnly? pickupTimeTo,
         decimal? latitude,
         decimal? longitude,
         List<CreateListingItemInput>? items);

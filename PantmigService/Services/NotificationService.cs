@@ -31,6 +31,20 @@ namespace PantmigService.Services
             _db.Notifications.Add(n);
             await _db.SaveChangesAsync(ct);
 
+            // Log creation for traceability
+            _logger.LogInformation("Notification {NotificationId} created for user {UserId} listing {ListingId} type {Type}", n.Id, userId, listingId, type);
+
+            // Best-effort role hint for client filter (no DB dependency): infer from notification type
+            // RecyclerApplied -> recipient is Donator; DonorAccepted/MeetingSet/ChatMessage -> ambiguous; send null or 'Unknown'
+            string? recipientRole = type switch
+            {
+                NotificationType.RecyclerApplied => "Donator",
+                NotificationType.DonorAccepted => "Recycler",
+                NotificationType.MeetingSet => "Recycler",
+                NotificationType.ChatMessage => null,
+                _ => null
+            };
+
             try
             {
                 await _hub.Clients.Group($"user-{userId}").SendAsync("Notify", new
@@ -39,7 +53,9 @@ namespace PantmigService.Services
                     n.ListingId,
                     n.Type,
                     n.Message,
-                    n.CreatedAt
+                    n.CreatedAt,
+                    recipientUserId = userId,
+                    recipientRole
                 }, ct);
             }
             catch (Exception ex)

@@ -11,8 +11,6 @@ public class RecycleListingValidationService : IRecycleListingValidationService
         string? location,
         DateOnly availableFrom,
         DateOnly availableTo,
-        TimeOnly? pickupTimeFrom,
-        TimeOnly? pickupTimeTo,
         decimal? latitude,
         decimal? longitude,
         List<CreateListingItemInput>? items)
@@ -26,12 +24,6 @@ public class RecycleListingValidationService : IRecycleListingValidationService
 
         if (availableTo <= availableFrom)
             return ValidationResult<CreateListingValidated>.Failure("Validation error", "AvailableTo must be after AvailableFrom", StatusCodes.Status400BadRequest);
-
-        if ((pickupTimeFrom.HasValue && !pickupTimeTo.HasValue) || (!pickupTimeFrom.HasValue && pickupTimeTo.HasValue))
-            return ValidationResult<CreateListingValidated>.Failure("Validation error", "Both pickupTimeFrom and pickupTimeTo must be supplied together", StatusCodes.Status400BadRequest);
-
-        if (pickupTimeFrom.HasValue && pickupTimeTo.HasValue && pickupTimeTo <= pickupTimeFrom)
-            return ValidationResult<CreateListingValidated>.Failure("Validation error", "pickupTimeTo must be after pickupTimeFrom", StatusCodes.Status400BadRequest);
 
         // Validate coordinates if provided: both must be present and within range
         var hasLat = latitude.HasValue;
@@ -75,8 +67,6 @@ public class RecycleListingValidationService : IRecycleListingValidationService
             cityInput.Trim(),
             availableFrom,
             availableTo,
-            pickupTimeFrom,
-            pickupTimeTo,
             latitude,
             longitude,
             items,

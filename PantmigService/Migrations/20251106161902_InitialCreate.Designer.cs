@@ -12,7 +12,7 @@ using PantmigService.Data;
 namespace PantmigService.Migrations
 {
     [DbContext(typeof(PantmigDbContext))]
-    [Migration("20251019155731_InitialCreate")]
+    [Migration("20251106161902_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />
@@ -20,7 +20,7 @@ namespace PantmigService.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "9.0.9")
+                .HasAnnotation("ProductVersion", "9.0.10")
                 .HasAnnotation("Relational:MaxIdentifierLength", 128);
 
             SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
@@ -233,12 +233,6 @@ namespace PantmigService.Migrations
 
                     b.Property<DateTime?>("PickupConfirmedAt")
                         .HasColumnType("datetime2");
-
-                    b.Property<TimeOnly?>("PickupTimeFrom")
-                        .HasColumnType("time");
-
-                    b.Property<TimeOnly?>("PickupTimeTo")
-                        .HasColumnType("time");
 
                     b.Property<byte[]>("ReceiptImageBytes")
                         .HasColumnType("varbinary(max)");
