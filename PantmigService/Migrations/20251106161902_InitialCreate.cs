@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore.Migrations;
+﻿using System;
+using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
 
@@ -107,8 +108,6 @@ namespace PantmigService.Migrations
                     EstimatedValue = table.Column<decimal>(type: "decimal(18,2)", precision: 18, scale: 2, nullable: true),
                     AvailableFrom = table.Column<DateOnly>(type: "date", nullable: false),
                     AvailableTo = table.Column<DateOnly>(type: "date", nullable: false),
-                    PickupTimeFrom = table.Column<TimeOnly>(type: "time", nullable: true),
-                    PickupTimeTo = table.Column<TimeOnly>(type: "time", nullable: true),
                     CreatedAt = table.Column<DateTime>(type: "datetime2", nullable: false),
                     CreatedByUserId = table.Column<string>(type: "nvarchar(450)", nullable: false),
                     IsActive = table.Column<bool>(type: "bit", nullable: false),

@@ -33,12 +33,6 @@ public class CreateListingRequestParser : ICreateListingRequestParser
 
             DateOnly.TryParse(form["AvailableFrom"].FirstOrDefault() ?? form["availableFrom"].FirstOrDefault(), out var availableFrom);
             DateOnly.TryParse(form["AvailableTo"].FirstOrDefault() ?? form["availableTo"].FirstOrDefault(), out var availableTo);
-            TimeOnly? pickupFrom = null;
-            TimeOnly? pickupTo = null;
-            if (TimeOnly.TryParse(form["PickupTimeFrom"].FirstOrDefault() ?? form["pickupTimeFrom"].FirstOrDefault(), out var tFrom))
-                pickupFrom = tFrom;
-            if (TimeOnly.TryParse(form["PickupTimeTo"].FirstOrDefault() ?? form["pickupTimeTo"].FirstOrDefault(), out var tTo))
-                pickupTo = tTo;
 
             decimal? latitude = null;
             decimal? longitude = null;
@@ -110,8 +104,6 @@ public class CreateListingRequestParser : ICreateListingRequestParser
                 Location = location,
                 AvailableFrom = availableFrom,
                 AvailableTo = availableTo,
-                PickupTimeFrom = pickupFrom,
-                PickupTimeTo = pickupTo,
                 Latitude = latitude,
                 Longitude = longitude,
                 RawItems = rawItems,
@@ -135,8 +127,6 @@ public class CreateListingRequestParser : ICreateListingRequestParser
                     Location = body.Location,
                     AvailableFrom = body.AvailableFrom,
                     AvailableTo = body.AvailableTo,
-                    PickupTimeFrom = body.PickupTimeFrom,
-                    PickupTimeTo = body.PickupTimeTo,
                     Latitude = body.Latitude,
                     Longitude = body.Longitude,
                     RawItems = body.Items
