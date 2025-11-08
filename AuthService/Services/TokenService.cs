@@ -27,8 +27,9 @@ namespace AuthService.Services
             var secretKey = jwtSection["SecretKey"] ?? throw new InvalidOperationException("Jwt SecretKey not configured");
             var issuer = jwtSection["Issuer"];
             var audience = jwtSection["Audience"];
-            var minutesString = jwtSection["AccessTokenMinutes"];
-            var expires = DateTime.UtcNow.AddMinutes(int.TryParse(minutesString, out var m) ? m : 60);
+            // Support both legacy and current key names
+            var minutesString = jwtSection["AccessTokenExpirationMinutes"] ?? jwtSection["AccessTokenMinutes"];
+            var expires = DateTime.UtcNow.AddMinutes(int.TryParse(minutesString, out var m) ? m :60);
 
             var claims = new List<Claim>
             {
@@ -43,7 +44,6 @@ namespace AuthService.Services
                 new("userType", user.UserType.ToString()),
                 new("isMitIdVerified", user.IsMitIdVerified.ToString()),
                 new(ClaimTypes.Role, user.UserType.ToString()),
-                // New demographic claims
                 new("gender", user.Gender.ToString()),
                 new("isOrganization", user.IsOrganization.ToString())
             };
@@ -79,12 +79,10 @@ namespace AuthService.Services
 
         public async Task<string> GenerateAndStoreRefreshTokenAsync(ApplicationUser user, CancellationToken ct = default)
         {
-            // unchanged ... existing implementation
-            var tokenBytes = RandomNumberGenerator.GetBytes(64);
-            var token = Microsoft.IdentityModel.Tokens.Base64UrlEncoder.Encode(tokenBytes);
-
+            var token = GenerateRawRefreshToken();
             var jwtSection = _config.GetSection("JwtSettings");
-            var refreshDays = int.TryParse(jwtSection["RefreshTokenDays"], out var d) ? d : 30;
+            var refreshDaysString = jwtSection["RefreshTokenExpirationDays"] ?? jwtSection["RefreshTokenDays"];
+            var refreshDays = int.TryParse(refreshDaysString, out var d) ? d :30;
 
             var rt = new RefreshToken
             {
@@ -95,7 +93,6 @@ namespace AuthService.Services
 
             _db.RefreshTokens.Add(rt);
             await _db.SaveChangesAsync(ct);
-
             return token;
         }
 
@@ -103,12 +100,8 @@ namespace AuthService.Services
         {
             try
             {
-                // Normalize refresh token to guard against formatting issues in transport
                 var incomingRt = (refreshToken ?? string.Empty).Trim();
-                if (incomingRt.Contains(' ') && !incomingRt.Contains('+'))
-                {
-                    incomingRt = incomingRt.Replace(' ', '+');
-                }
+                if (string.IsNullOrEmpty(incomingRt)) return (null, "Missing refresh token");
 
                 string? userId = null;
                 try
@@ -118,30 +111,51 @@ namespace AuthService.Services
                 }
                 catch
                 {
-                    // ignore here; we'll try to resolve user via refresh token below
+                    // ignore; we'll fallback to refresh token lookup
                 }
 
-                RefreshToken? rt = null;
+                RefreshToken? current = null;
                 if (!string.IsNullOrEmpty(userId))
                 {
-                    rt = await _db.RefreshTokens.FirstOrDefaultAsync(t => t.Token == incomingRt && t.UserId == userId, ct);
+                    current = await _db.RefreshTokens.FirstOrDefaultAsync(t => t.Token == incomingRt && t.UserId == userId, ct);
                 }
-
-                // Fallback: resolve by refresh token only
-                if (rt is null)
+                if (current is null)
                 {
-                    rt = await _db.RefreshTokens.FirstOrDefaultAsync(t => t.Token == incomingRt, ct);
-                    userId ??= rt?.UserId;
+                    current = await _db.RefreshTokens.FirstOrDefaultAsync(t => t.Token == incomingRt, ct);
+                    userId ??= current?.UserId;
                 }
 
-                if (rt is null || rt.Expires <= DateTime.UtcNow || string.IsNullOrEmpty(userId))
+                if (current is null || current.IsExpired || current.Revoked != null || string.IsNullOrEmpty(userId))
+                {
                     return (null, "Invalid or expired refresh token");
+                }
 
-                // Load user with city
+                // Load user
                 var user = await _db.Users.Include(u => u.City).FirstOrDefaultAsync(u => u.Id == userId, ct);
                 if (user is null) return (null, "User not found");
 
+                // Generate new refresh token (rotation)
+                var newRtValue = GenerateRawRefreshToken();
+                var jwtSection = _config.GetSection("JwtSettings");
+                var refreshDaysString = jwtSection["RefreshTokenExpirationDays"] ?? jwtSection["RefreshTokenDays"];
+                var refreshDays = int.TryParse(refreshDaysString, out var rd) ? rd :30;
+
+                var newRt = new RefreshToken
+                {
+                    UserId = user.Id,
+                    Token = newRtValue,
+                    Expires = DateTime.UtcNow.AddDays(refreshDays)
+                };
+
+                // Revoke old
+                current.Revoked = DateTime.UtcNow;
+                current.ReplacedByToken = newRtValue;
+
+                _db.RefreshTokens.Add(newRt);
+                await _db.SaveChangesAsync(ct);
+
                 var (newAccess, exp) = GenerateAccessToken(user);
+
                 return (new AuthResponse
                 {
                     UserId = user.Id,
@@ -151,7 +165,7 @@ namespace AuthService.Services
                     LastName = user.LastName ?? string.Empty,
                     AccessToken = newAccess,
                     AccessTokenExpiration = exp,
-                    RefreshToken = incomingRt,
+                    RefreshToken = newRtValue,
                     UserType = user.UserType,
                     IsOrganization = user.IsOrganization,
                     CityId = user.CityId,
@@ -164,6 +178,12 @@ namespace AuthService.Services
             {
                 return (null, ex.Message);
             }
+        }
+
+        private static string GenerateRawRefreshToken()
+        {
+            var tokenBytes = RandomNumberGenerator.GetBytes(64);
+            return Base64UrlEncoder.Encode(tokenBytes);
         }
 
         private ClaimsPrincipal ValidateAccessToken(string token, bool validateLifetime)
