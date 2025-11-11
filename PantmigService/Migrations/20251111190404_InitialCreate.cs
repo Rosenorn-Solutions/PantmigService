@@ -34,6 +34,7 @@ namespace PantmigService.Migrations
                 {
                     Id = table.Column<int>(type: "int", nullable: false)
                         .Annotation("SqlServer:Identity", "1, 1"),
+                    ExternalId = table.Column<Guid>(type: "uniqueidentifier", nullable: false),
                     Name = table.Column<string>(type: "nvarchar(max)", nullable: false),
                     Slug = table.Column<string>(type: "nvarchar(450)", nullable: false)
                 },
@@ -211,6 +212,12 @@ namespace PantmigService.Migrations
                 name: "IX_ChatMessages_ListingId_SentAt",
                 table: "ChatMessages",
                 columns: new[] { "ListingId", "SentAt" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_Cities_ExternalId",
+                table: "Cities",
+                column: "ExternalId",
+                unique: true);
 
             migrationBuilder.CreateIndex(
                 name: "IX_Cities_Slug",

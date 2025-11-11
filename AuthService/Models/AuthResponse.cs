@@ -18,7 +18,7 @@
         public DateOnly? BirthDate { get; set; }
 
         // Optional city info for convenience
-        public int? CityId { get; set; }
+        public Guid? CityExternalId { get; set; }
         public string? CityName { get; set; }
     }
 }

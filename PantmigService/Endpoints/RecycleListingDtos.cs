@@ -1,4 +1,5 @@
 using PantmigService.Entities;
+using Microsoft.EntityFrameworkCore;
 
 namespace PantmigService.Endpoints;
 
@@ -17,7 +18,7 @@ public record RecycleListingResponse
     public DateTime CreatedAt { get; init; }
     public bool IsActive { get; init; }
     public ListingStatus Status { get; init; }
-    public int CityId { get; init; }
+    public Guid CityExternalId { get; init; }
     public string? AssignedRecyclerUserId { get; init; }
     public string? ChatSessionId { get; init; }
     public decimal? ReportedAmount { get; init; }
@@ -44,7 +45,7 @@ public static class RecycleListingMapper
             CreatedAt = l.CreatedAt,
             IsActive = l.IsActive,
             Status = l.Status,
-            CityId = l.CityId,
+            CityExternalId = l.City?.ExternalId ?? Guid.Empty,
             AssignedRecyclerUserId = l.AssignedRecyclerUserId,
             ChatSessionId = l.ChatSessionId,
             ReportedAmount = l.ReportedAmount,

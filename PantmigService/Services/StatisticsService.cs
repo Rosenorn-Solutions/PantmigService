@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using PantmigService.Data;
 using PantmigService.Entities;
+using PantmigShared;
 
 namespace PantmigService.Services;
 
@@ -57,7 +58,7 @@ public class StatisticsService(PantmigDbContext db) : IStatisticsService
     {
         if (string.IsNullOrWhiteSpace(city)) return null;
 
-        var slug = Utils.Helpers.SlugHelper.ToSlug(city);
+        var slug = SlugHelper.ToSlug(city);
 
         var cityRow = await _db.Cities
             .AsNoTracking()

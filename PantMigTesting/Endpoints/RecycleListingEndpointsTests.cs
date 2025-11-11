@@ -193,7 +193,7 @@ namespace PantMigTesting.Endpoints
             });
 
             Assert.Equal(HttpStatusCode.Created, resp.StatusCode);
-            var created = await resp.Content.ReadFromJsonAsync<RecycleListing>();
+            var created = await resp.Content.ReadFromJsonAsync<RecycleListingResponse>();
             Assert.NotNull(created);
             Assert.True(created!.Id > 0);
             Assert.Equal("donator-1", created.CreatedByUserId);
@@ -217,13 +217,13 @@ namespace PantMigTesting.Endpoints
                 Items = new[] { new { Type = 3, Quantity = 50 } }
             });
             createResp.EnsureSuccessStatusCode();
-            var listing = await createResp.Content.ReadFromJsonAsync<RecycleListing>();
+            var listing = await createResp.Content.ReadFromJsonAsync<RecycleListingResponse>();
             Assert.NotNull(listing);
             var id = listing!.Id;
             Assert.True(id > 0);
 
             // GET active includes it (no trailing slash)
-            var active1 = await client.GetFromJsonAsync<Paged<RecycleListing>>("/listings");
+            var active1 = await client.GetFromJsonAsync<Paged<RecycleListingResponse>>("/listings");
             Assert.Contains(active1!.Items, x => x.Id == id);
 
             //2. Recycler requests pickup
@@ -275,7 +275,7 @@ namespace PantMigTesting.Endpoints
                 Items = new[] { new { Type = 1, Quantity = 25 } }
             });
             createResp.EnsureSuccessStatusCode();
-            var listing = await createResp.Content.ReadFromJsonAsync<RecycleListing>();
+            var listing = await createResp.Content.ReadFromJsonAsync<RecycleListingResponse>();
             var id = listing!.Id;
 
             // Recycler cannot access
@@ -292,7 +292,7 @@ namespace PantMigTesting.Endpoints
             client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
             var ownerResp = await client.GetAsync($"/listings/{id}/applicants");
             Assert.Equal(HttpStatusCode.OK, ownerResp.StatusCode);
-            var list = await ownerResp.Content.ReadFromJsonAsync<List<string>>();
+            var list = await ownerResp.Content.ReadFromJsonAsync<List<ApplicantInfo>>();
             Assert.NotNull(list);
             Assert.Empty(list!);
         }
@@ -315,7 +315,7 @@ namespace PantMigTesting.Endpoints
                 Items = new[] { new { Type = 3, Quantity = 10 } }
             });
             createResp.EnsureSuccessStatusCode();
-            var listing = await createResp.Content.ReadFromJsonAsync<RecycleListing>();
+            var listing = await createResp.Content.ReadFromJsonAsync<RecycleListingResponse>();
             var id = listing!.Id;
 
             // Recycler cannot cancel (policy)
@@ -334,13 +334,13 @@ namespace PantMigTesting.Endpoints
             Assert.Equal(HttpStatusCode.OK, ownerCancel.StatusCode);
 
             // Verify listing is cancelled
-            var final = await client.GetFromJsonAsync<RecycleListing>($"/listings/{id}");
+            var final = await client.GetFromJsonAsync<RecycleListingResponse>($"/listings/{id}");
             Assert.NotNull(final);
             Assert.Equal(ListingStatus.Cancelled, final!.Status);
             Assert.False(final.IsActive);
 
             // Active should not include it
-            var active = await client.GetFromJsonAsync<Paged<RecycleListing>>("/listings");
+            var active = await client.GetFromJsonAsync<Paged<RecycleListingResponse>>("/listings");
             Assert.DoesNotContain(active!.Items, x => x.Id == id);
 
             // Second cancel attempt should be BadRequest
@@ -358,12 +358,12 @@ namespace PantMigTesting.Endpoints
             client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
             var l1Resp = await client.PostAsJsonAsync("/listings", new { Title = "L1", Description = "desc", City = "CPH", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Items = new[] { new { Type = 3, Quantity = 5 } } });
             l1Resp.EnsureSuccessStatusCode();
-            var l1 = await l1Resp.Content.ReadFromJsonAsync<RecycleListing>();
+            var l1 = await l1Resp.Content.ReadFromJsonAsync<RecycleListingResponse>();
             Assert.NotNull(l1);
 
             var l2Resp = await client.PostAsJsonAsync("/listings", new { Title = "L2", Description = "desc", City = "CPH", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Items = new[] { new { Type = 3, Quantity = 6 } } });
             l2Resp.EnsureSuccessStatusCode();
-            var l2 = await l2Resp.Content.ReadFromJsonAsync<RecycleListing>();
+            var l2 = await l2Resp.Content.ReadFromJsonAsync<RecycleListingResponse>();
             Assert.NotNull(l2);
 
             // Request pickup to make l2 PendingAcceptance
@@ -375,19 +375,19 @@ namespace PantMigTesting.Endpoints
             client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
             var l3Resp = await client.PostAsJsonAsync("/listings", new { Title = "L3", Description = "desc", City = "CPH", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Items = new[] { new { Type = 3, Quantity = 7 } } });
             l3Resp.EnsureSuccessStatusCode();
-            var l3 = await l3Resp.Content.ReadFromJsonAsync<RecycleListing>();
+            var l3 = await l3Resp.Content.ReadFromJsonAsync<RecycleListingResponse>();
             var cancelResp = await client.PostAsJsonAsync("/listings/cancel", new { ListingId = l3!.Id });
             cancelResp.EnsureSuccessStatusCode();
 
             // Create listing in a different city
             var otherCityResp = await client.PostAsJsonAsync("/listings", new { Title = "OtherCity", Description = "desc", City = "Aalborg", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Items = new[] { new { Type = 3, Quantity = 1 } } });
             otherCityResp.EnsureSuccessStatusCode();
-            var other = await otherCityResp.Content.ReadFromJsonAsync<RecycleListing>();
+            var other = await otherCityResp.Content.ReadFromJsonAsync<RecycleListingResponse>();
 
-            // Search for cityId of CPH
-            var searchResp = await client.PostAsJsonAsync("/listings/search", new { CityId = l1!.CityId });
+            // Search for CityExternalId of CPH
+            var searchResp = await client.PostAsJsonAsync("/listings/search", new { CityExternalId = l1!.CityExternalId });
             searchResp.EnsureSuccessStatusCode();
-            var results = await searchResp.Content.ReadFromJsonAsync<Paged<RecycleListing>>();
+            var results = await searchResp.Content.ReadFromJsonAsync<Paged<RecycleListingResponse>>();
             Assert.NotNull(results);
             // Only l1 (Created) and l2 (PendingAcceptance) should be present
             Assert.Contains(results!.Items, x => x.Id == l1.Id);
@@ -406,19 +406,19 @@ namespace PantMigTesting.Endpoints
             client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
             var l1Resp = await client.PostAsJsonAsync("/listings", new { Title = "L1", Description = "desc", City = "CPH", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Items = new[] { new { Type = 3, Quantity = 5 } } });
             l1Resp.EnsureSuccessStatusCode();
-            var l1 = await l1Resp.Content.ReadFromJsonAsync<RecycleListing>();
+            var l1 = await l1Resp.Content.ReadFromJsonAsync<RecycleListingResponse>();
             var l2Resp = await client.PostAsJsonAsync("/listings", new { Title = "L2", Description = "desc", City = "CPH", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Items = new[] { new { Type = 3, Quantity = 6 } } });
             l2Resp.EnsureSuccessStatusCode();
-            var l2 = await l2Resp.Content.ReadFromJsonAsync<RecycleListing>();
+            var l2 = await l2Resp.Content.ReadFromJsonAsync<RecycleListingResponse>();
 
             // Cancel l2
             var cancel = await client.PostAsJsonAsync("/listings/cancel", new { ListingId = l2!.Id });
             cancel.EnsureSuccessStatusCode();
 
-            // Search for cityId with onlyActive=false
-            var searchResp = await client.PostAsJsonAsync("/listings/search", new { CityId = l1!.CityId, OnlyActive = false });
+            // Search for city with onlyActive=false
+            var searchResp = await client.PostAsJsonAsync("/listings/search", new { CityExternalId = l1!.CityExternalId, OnlyActive = false });
             searchResp.EnsureSuccessStatusCode();
-            var results = await searchResp.Content.ReadFromJsonAsync<Paged<RecycleListing>>();
+            var results = await searchResp.Content.ReadFromJsonAsync<Paged<RecycleListingResponse>>();
             Assert.NotNull(results);
             Assert.Contains(results!.Items, x => x.Id == l1.Id);
             Assert.Contains(results!.Items, x => x.Id == l2!.Id);
@@ -432,12 +432,12 @@ namespace PantMigTesting.Endpoints
 
             // Create two listings in same city
             client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
-            var l1Resp = await client.PostAsJsonAsync("/listings", new { Title = "L1", Description = "desc", City = "CPH", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Items = new[] { new { Type =3, Quantity =5 } } });
+            var l1Resp = await client.PostAsJsonAsync("/listings", new { Title = "L1", Description = "desc", City = "CPH", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Items = new[] { new { Type = 3, Quantity = 5 } } });
             l1Resp.EnsureSuccessStatusCode();
-            var l1 = await l1Resp.Content.ReadFromJsonAsync<RecycleListing>();
-            var l2Resp = await client.PostAsJsonAsync("/listings", new { Title = "L2", Description = "desc", City = "CPH", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Items = new[] { new { Type =3, Quantity =6 } } });
+            var l1 = await l1Resp.Content.ReadFromJsonAsync<RecycleListingResponse>();
+            var l2Resp = await client.PostAsJsonAsync("/listings", new { Title = "L2", Description = "desc", City = "CPH", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Items = new[] { new { Type = 3, Quantity = 6 } } });
             l2Resp.EnsureSuccessStatusCode();
-            var l2 = await l2Resp.Content.ReadFromJsonAsync<RecycleListing>();
+            var l2 = await l2Resp.Content.ReadFromJsonAsync<RecycleListingResponse>();
 
             // Recycler applies for l2
             client.SetTestUser("recycler-1", userType: "Recycler", isMitIdVerified: true);
@@ -445,9 +445,9 @@ namespace PantMigTesting.Endpoints
             pickup.EnsureSuccessStatusCode();
 
             // Search should exclude l2 for recycler-1
-            var searchResp = await client.PostAsJsonAsync("/listings/search", new { CityId = l1!.CityId });
+            var searchResp = await client.PostAsJsonAsync("/listings/search", new { CityExternalId = l1!.CityExternalId });
             searchResp.EnsureSuccessStatusCode();
-            var results = await searchResp.Content.ReadFromJsonAsync<Paged<RecycleListing>>();
+            var results = await searchResp.Content.ReadFromJsonAsync<Paged<RecycleListingResponse>>();
             Assert.NotNull(results);
             Assert.Contains(results!.Items, x => x.Id == l1.Id);
             Assert.DoesNotContain(results!.Items, x => x.Id == l2!.Id);
@@ -467,9 +467,9 @@ namespace PantMigTesting.Endpoints
                 City = "CPH",
                 AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow),
                 AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(2)),
-                Latitude =55.6761m,
-                Longitude =12.5683m,
-                Items = new[] { new { Type =3, Quantity =50 } }
+                Latitude = 55.6761m,
+                Longitude = 12.5683m,
+                Items = new[] { new { Type = 3, Quantity = 50 } }
             });
             createResp.EnsureSuccessStatusCode();
             var listing = await createResp.Content.ReadFromJsonAsync<RecycleListingResponse>();
@@ -486,19 +486,19 @@ namespace PantMigTesting.Endpoints
             client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
 
             // Create two listings with coordinates: one near, one far
-            var near = await client.PostAsJsonAsync("/listings", new { Title = "Near", Description = "desc", City = "CPH", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Latitude =55.6761m, Longitude =12.5683m, Items = new[] { new { Type =3, Quantity =1 } } });
+            var near = await client.PostAsJsonAsync("/listings", new { Title = "Near", Description = "desc", City = "CPH", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Latitude = 55.6761m, Longitude = 12.5683m, Items = new[] { new { Type = 3, Quantity = 1 } } });
             near.EnsureSuccessStatusCode();
-            _ = await near.Content.ReadFromJsonAsync<RecycleListing>();
+            _ = await near.Content.ReadFromJsonAsync<RecycleListingResponse>();
 
-            var far = await client.PostAsJsonAsync("/listings", new { Title = "Far", Description = "desc", City = "CPH", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Latitude =55.0m, Longitude =12.0m, Items = new[] { new { Type =3, Quantity =1 } } });
+            var far = await client.PostAsJsonAsync("/listings", new { Title = "Far", Description = "desc", City = "CPH", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Latitude = 55.0m, Longitude = 12.0m, Items = new[] { new { Type = 3, Quantity = 1 } } });
             far.EnsureSuccessStatusCode();
-            _ = await far.Content.ReadFromJsonAsync<RecycleListing>();
+            _ = await far.Content.ReadFromJsonAsync<RecycleListingResponse>();
 
             // Search with coordinates near Copenhagen
             client.SetTestUser("recycler-1", userType: "Recycler", isMitIdVerified: true);
-            var search = await client.PostAsJsonAsync("/listings/search", new { Latitude =55.6761m, Longitude =12.5683m });
+            var search = await client.PostAsJsonAsync("/listings/search", new { Latitude = 55.6761m, Longitude = 12.5683m });
             search.EnsureSuccessStatusCode();
-            var results = await search.Content.ReadFromJsonAsync<Paged<RecycleListing>>();
+            var results = await search.Content.ReadFromJsonAsync<Paged<RecycleListingResponse>>();
             Assert.NotNull(results);
             Assert.Contains(results!.Items, x => x.Title == "Near");
             // The far one should be filtered by bounding box and distance approx; with bounding box only, it's already far enough
@@ -513,20 +513,20 @@ namespace PantMigTesting.Endpoints
             client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
 
             // Create one listing in CPH without coordinates
-            var cph = await client.PostAsJsonAsync("/listings", new { Title = "CityOnly", Description = "desc", City = "CPH", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Items = new[] { new { Type =3, Quantity =1 } } });
+            var cph = await client.PostAsJsonAsync("/listings", new { Title = "CityOnly", Description = "desc", City = "CPH", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Items = new[] { new { Type = 3, Quantity = 1 } } });
             cph.EnsureSuccessStatusCode();
-            var cphListing = await cph.Content.ReadFromJsonAsync<RecycleListing>();
+            var cphListing = await cph.Content.ReadFromJsonAsync<RecycleListingResponse>();
 
             // Another listing in other city but near coordinates
-            var aal = await client.PostAsJsonAsync("/listings", new { Title = "NearCoord", Description = "desc", City = "Aalborg", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Latitude =55.6762m, Longitude =12.5684m, Items = new[] { new { Type =3, Quantity =1 } } });
+            var aal = await client.PostAsJsonAsync("/listings", new { Title = "NearCoord", Description = "desc", City = "Aalborg", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Latitude = 55.6762m, Longitude = 12.5684m, Items = new[] { new { Type = 3, Quantity = 1 } } });
             aal.EnsureSuccessStatusCode();
-            _ = await aal.Content.ReadFromJsonAsync<RecycleListing>();
+            _ = await aal.Content.ReadFromJsonAsync<RecycleListingResponse>();
 
-            // Search for CPH cityId plus coordinates near Copenhagen
+            // Search for CPH city plus coordinates near Copenhagen
             client.SetTestUser("recycler-1", userType: "Recycler", isMitIdVerified: true);
-            var search = await client.PostAsJsonAsync("/listings/search", new { CityId = cphListing!.CityId, Latitude =55.6761m, Longitude =12.5683m });
+            var search = await client.PostAsJsonAsync("/listings/search", new { CityExternalId = cphListing!.CityExternalId, Latitude = 55.6761m, Longitude = 12.5683m });
             search.EnsureSuccessStatusCode();
-            var results = await search.Content.ReadFromJsonAsync<Paged<RecycleListing>>();
+            var results = await search.Content.ReadFromJsonAsync<Paged<RecycleListingResponse>>();
             Assert.NotNull(results);
             Assert.Contains(results!.Items, x => x.Title == "CityOnly");
             Assert.Contains(results!.Items, x => x.Title == "NearCoord");

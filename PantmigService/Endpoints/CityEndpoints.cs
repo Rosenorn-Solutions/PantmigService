@@ -5,7 +5,7 @@ namespace PantmigService.Endpoints
 {
     public static class CityEndpoints
     {
-        public record CitySearchResult(int Id, string Name, string[] PostalCodes);
+        public record CitySearchResult(Guid ExternalId, string Name, string[] PostalCodes);
 
         public static IEndpointRouteBuilder MapCityEndpoints(this IEndpointRouteBuilder app)
         {
@@ -35,7 +35,7 @@ namespace PantmigService.Endpoints
 
                 var cities = await db.Cities
                     .Where(c => cityIds.Contains(c.Id))
-                    .Select(c => new { c.Id, c.Name })
+                    .Select(c => new { c.ExternalId, c.Id, c.Name })
                     .ToListAsync();
 
                 var postals = await db.CityPostalCodes
@@ -47,7 +47,7 @@ namespace PantmigService.Endpoints
                 var postalDict = postals.ToDictionary(x => x.CityId, x => x.PostalCodes);
 
                 var results = cities
-                    .Select(c => new CitySearchResult(c.Id, c.Name, postalDict.TryGetValue(c.Id, out var arr) ? arr : Array.Empty<string>()))
+                    .Select(c => new CitySearchResult(c.ExternalId, c.Name, postalDict.TryGetValue(c.Id, out var arr) ? arr : Array.Empty<string>()))
                     .OrderBy(c => c.Name)
                     .ToList();
 

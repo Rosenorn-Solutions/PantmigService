@@ -55,10 +55,11 @@ namespace AuthService.Services
 
             if (user.CityId.HasValue)
             {
-                claims.Add(new Claim("cityId", user.CityId.Value.ToString()));
-                if (user.City is not null && !string.IsNullOrWhiteSpace(user.City.Name))
+                if (user.City is not null)
                 {
-                    claims.Add(new Claim("cityName", user.City.Name));
+                    claims.Add(new Claim("cityExternalId", user.City.ExternalId.ToString()));
+                    if (!string.IsNullOrWhiteSpace(user.City.Name))
+                        claims.Add(new Claim("cityName", user.City.Name));
                 }
             }
 
@@ -154,7 +155,7 @@ namespace AuthService.Services
                     RefreshToken = incomingRt,
                     UserType = user.UserType,
                     IsOrganization = user.IsOrganization,
-                    CityId = user.CityId,
+                    CityExternalId = user.City?.ExternalId,
                     CityName = user.City?.Name,
                     Gender = user.Gender,
                     BirthDate = user.BirthDate

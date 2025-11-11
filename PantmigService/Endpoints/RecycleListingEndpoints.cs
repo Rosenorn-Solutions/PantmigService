@@ -13,15 +13,15 @@ namespace PantmigService.Endpoints
     public static class RecycleListingEndpoints
     {
         public record CreateRecycleListingItemRequest(RecycleMaterialType Type, int Quantity, string? DepositClass, decimal? EstimatedDepositPerUnit);
-        public record CreateRecycleListingRequest(string Title, string Description, string? City, string? Location, DateOnly AvailableFrom, DateOnly AvailableTo, decimal? Latitude, decimal? Longitude, List<CreateRecycleListingItemRequest> Items);
+        public record CreateRecycleListingRequest(string Title, string Description, Guid? CityExternalId, string? City, string? Location, DateOnly AvailableFrom, DateOnly AvailableTo, decimal? Latitude, decimal? Longitude, List<CreateRecycleListingItemRequest> Items);
         public record PickupRequest(int ListingId);
         public record AcceptRequest(int ListingId, string RecyclerUserId);
         public record ChatStartRequest(int ListingId);
         public record PickupConfirmRequest(int ListingId);
         public record MeetingPointRequest(int ListingId, decimal Latitude, decimal Longitude);
         public record CancelRequest(int ListingId);
-        public record SearchRequest(int CityId, bool OnlyActive = true);
-        public record PagedSearchRequest<T>(int? CityId, int Page = 1, int PageSize = 20, bool OnlyActive = true, decimal? Latitude = null, decimal? Longitude = null);
+        public record SearchRequest(Guid CityExternalId, bool OnlyActive = true);
+        public record PagedSearchRequest<T>(Guid? CityExternalId, int Page =1, int PageSize =20, bool OnlyActive = true, decimal? Latitude = null, decimal? Longitude = null);
 
         public static IEndpointRouteBuilder MapRecycleListingEndpoints(this IEndpointRouteBuilder app)
         {
@@ -36,9 +36,9 @@ namespace PantmigService.Endpoints
                 {
                     var p = page.GetValueOrDefault(1);
                     var ps = pageSize.GetValueOrDefault(20);
-                    if (p <= 0) p = 1;
-                    if (ps <= 0) ps = 20;
-                    if (ps > 100) ps = 100;
+                    if (p <=0) p =1;
+                    if (ps <=0) ps =20;
+                    if (ps >100) ps =100;
                     var data = await svc.GetActivePagedAsync(p, ps, ctx.RequestAborted);
                     var dto = data.Map(l => l.ToResponse());
                     return Results.Ok(dto);
@@ -64,15 +64,15 @@ namespace PantmigService.Endpoints
             .RequireAuthorization()
             .Produces<PagedResult<RecycleListingResponse>>(StatusCodes.Status200OK, contentType: "application/json");
 
-            // Updated search endpoint: supports optional cityId and/or coordinates
-            group.MapPost("/search", async (PagedSearchRequest<object> req, ClaimsPrincipal user, IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx) =>
+            // Updated search endpoint: supports optional cityExternalId and/or coordinates
+            group.MapPost("/search", async (PagedSearchRequest<object> req, ClaimsPrincipal user, IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx, ICityResolver cityResolver) =>
             {
                 var logger = lf.CreateLogger("Listings");
                 try
                 {
-                    if (!req.CityId.HasValue && (!req.Latitude.HasValue || !req.Longitude.HasValue))
+                    if (!req.CityExternalId.HasValue && (!req.Latitude.HasValue || !req.Longitude.HasValue))
                     {
-                        return Results.Problem(title: "Invalid search", detail: "Provide either cityId or both latitude and longitude.", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
+                        return Results.Problem(title: "Invalid search", detail: "Provide either cityExternalId or both latitude and longitude.", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
                     }
 
                     if ((req.Latitude.HasValue && !req.Longitude.HasValue) || (!req.Latitude.HasValue && req.Longitude.HasValue))
@@ -80,11 +80,11 @@ namespace PantmigService.Endpoints
                         return Results.Problem(title: "Invalid search", detail: "Both latitude and longitude must be provided for coordinate search.", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
                     }
 
-                    if (req.Latitude.HasValue && (req.Latitude < -90 || req.Latitude > 90))
+                    if (req.Latitude.HasValue && (req.Latitude < -90 || req.Latitude >90))
                     {
                         return Results.Problem(title: "Invalid search", detail: "Latitude must be between -90 and90.", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
                     }
-                    if (req.Longitude.HasValue && (req.Longitude < -180 || req.Longitude > 180))
+                    if (req.Longitude.HasValue && (req.Longitude < -180 || req.Longitude >180))
                     {
                         return Results.Problem(title: "Invalid search", detail: "Longitude must be between -180 and180.", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
                     }
@@ -95,10 +95,21 @@ namespace PantmigService.Endpoints
                         return Results.Unauthorized();
                     }
 
-                    var pageVal = req.Page <= 0 ? 1 : req.Page;
-                    var pageSizeVal = req.PageSize <= 0 ? 20 : Math.Min(req.PageSize, 100);
+                    var pageVal = req.Page <=0 ?1 : req.Page;
+                    var pageSizeVal = req.PageSize <=0 ?20 : Math.Min(req.PageSize,100);
 
-                    var result = await svc.SearchAsync(req.CityId, userId, pageVal, pageSizeVal, req.OnlyActive, req.Latitude, req.Longitude, ctx.RequestAborted);
+                    int? cityId = null;
+                    if (req.CityExternalId.HasValue)
+                    {
+                        try { cityId = await cityResolver.ResolveByExternalIdAsync(req.CityExternalId.Value, ctx.RequestAborted); }
+                        catch (Exception ex)
+                        {
+                            logger.LogWarning(ex, "Failed to resolve city by external id: {CityExternalId}", req.CityExternalId);
+                            return Results.Problem(title: "Invalid search", detail: "Unknown city.", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
+                        }
+                    }
+
+                    var result = await svc.SearchAsync(cityId, userId, pageVal, pageSizeVal, req.OnlyActive, req.Latitude, req.Longitude, ctx.RequestAborted);
                     var mapped = result.Map(l => l.ToResponse());
                     return Results.Ok(mapped);
                 }
@@ -114,7 +125,7 @@ namespace PantmigService.Endpoints
             {
                 op.OperationId = "Listings_Search";
                 op.Summary = "Search listings";
-                op.Description = "Search for listings with pagination. Filters: cityId (optional) and/or coordinates (latitude+longitude within5km). Results exclude listings that the current user has already applied for.";
+                op.Description = "Search for listings with pagination. Filters: cityExternalId (optional) and/or coordinates (latitude+longitude within5km). Results exclude listings that the current user has already applied for.";
                 op.RequestBody = new OpenApiRequestBody
                 {
                     Required = true,
@@ -127,7 +138,7 @@ namespace PantmigService.Endpoints
                      Type = "object",
                         Properties =
                         {
-                             [nameof(PagedSearchRequest<object>.CityId)] = new OpenApiSchema { Type = "integer", Format = "int32", Nullable = true, Description = "City identifier (optional)" },
+                             [nameof(PagedSearchRequest<object>.CityExternalId)] = new OpenApiSchema { Type = "string", Format = "uuid", Nullable = true, Description = "City external identifier (optional)" },
                              [nameof(PagedSearchRequest<object>.OnlyActive)] = new OpenApiSchema { Type = "boolean", Description = "If true, returns only active listings in Created or PendingAcceptance states.", Default = new Microsoft.OpenApi.Any.OpenApiBoolean(true) },
                              [nameof(PagedSearchRequest<object>.Page)] = new OpenApiSchema { Type = "integer", Format = "int32", Description = "Page number (1-based)", Default = new Microsoft.OpenApi.Any.OpenApiInteger(1) },
                              [nameof(PagedSearchRequest<object>.PageSize)] = new OpenApiSchema { Type = "integer", Format = "int32", Description = "Page size (max100)", Default = new Microsoft.OpenApi.Any.OpenApiInteger(20) },
@@ -262,7 +273,23 @@ namespace PantmigService.Endpoints
                     }
 
                     var v = validation.Value!;
-                    var cityId = await cityResolver.ResolveOrCreateAsync(v.CityInput, ctx.RequestAborted);
+                    int cityId;
+                    if (Guid.TryParse(httpRequest.Query["cityExternalId"], out var cityExtFromQuery))
+                    {
+                        cityId = await cityResolver.ResolveByExternalIdAsync(cityExtFromQuery, ctx.RequestAborted);
+                    }
+                    else if (Guid.TryParse(httpRequest.Headers["X-City-ExternalId"], out var cityExtFromHeader))
+                    {
+                        cityId = await cityResolver.ResolveByExternalIdAsync(cityExtFromHeader, ctx.RequestAborted);
+                    }
+                    else if (httpRequest.HasFormContentType && Guid.TryParse(httpRequest.Form["CityExternalId"], out var cityExtFromForm))
+                    {
+                        cityId = await cityResolver.ResolveByExternalIdAsync(cityExtFromForm, ctx.RequestAborted);
+                    }
+                    else
+                    {
+                        cityId = await cityResolver.ResolveOrCreateAsync(v.CityInput, ctx.RequestAborted);
+                    }
 
                     var listing = new RecycleListing
                     {
@@ -332,6 +359,7 @@ namespace PantmigService.Endpoints
                                  {
                                  ["title"] = new OpenApiSchema { Type = "string" },
                                  ["description"] = new OpenApiSchema { Type = "string" },
+                                 ["cityExternalId"] = new OpenApiSchema { Type = "string", Format = "uuid", Nullable = true },
                                  ["city"] = new OpenApiSchema { Type = "string" },
                                  ["location"] = new OpenApiSchema { Type = "string", Nullable = true },
                                  ["availableFrom"] = new OpenApiSchema { Type = "string", Format = "date" },
@@ -356,7 +384,7 @@ namespace PantmigService.Endpoints
                 };
                 return op;
             })
-            .WithMetadata(new RequestSizeLimitAttribute(64L * 1024 * 1024))
+            .WithMetadata(new RequestSizeLimitAttribute(64L *1024 *1024))
             .Produces<RecycleListingResponse>(StatusCodes.Status201Created, contentType: "application/json")
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized);

@@ -73,7 +73,18 @@ namespace AuthService.Endpoints
 
                 int? cityId = null;
                 string? cityName = null;
-                if (!string.IsNullOrWhiteSpace(req.City))
+                if (req.CityExternalId.HasValue)
+                {
+                    try
+                    {
+                        cityId = await cityResolver.ResolveByExternalIdAsync(req.CityExternalId.Value);
+                    }
+                    catch (Exception ex)
+                    {
+                        return Results.BadRequest(new RegisterResult { Success = false, ErrorMessage = $"Invalid city: {ex.Message}" });
+                    }
+                }
+                else if (!string.IsNullOrWhiteSpace(req.City))
                 {
                     try
                     {
@@ -112,7 +123,7 @@ namespace AuthService.Endpoints
                     RefreshToken = refresh,
                     UserType = user.UserType,
                     IsOrganization = user.IsOrganization,
-                    CityId = user.CityId,
+                    CityExternalId = user.City?.ExternalId,
                     CityName = cityName ?? user.City?.Name,
                     Gender = user.Gender,
                     BirthDate = user.BirthDate
@@ -171,7 +182,7 @@ namespace AuthService.Endpoints
                     RefreshToken = refresh,
                     UserType = user.UserType,
                     IsOrganization = user.IsOrganization,
-                    CityId = user.CityId,
+                    CityExternalId = user.City?.ExternalId,
                     CityName = user.City?.Name,
                     Gender = user.Gender,
                     BirthDate = user.BirthDate
@@ -247,11 +258,11 @@ namespace AuthService.Endpoints
             {
                 if (!user.Identity?.IsAuthenticated ?? true) return Results.Unauthorized();
 
-                int? cityId = null;
+                Guid? cityExternalId = null;
                 string? cityName = null;
 
-                var cityIdClaim = user.FindFirst("cityId")?.Value;
-                if (int.TryParse(cityIdClaim, out var cid)) cityId = cid;
+                var cityExtClaim = user.FindFirst("cityExternalId")?.Value;
+                if (Guid.TryParse(cityExtClaim, out var ce)) cityExternalId = ce;
                 cityName = user.FindFirst("cityName")?.Value;
 
                 var userId = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub") ?? string.Empty;
@@ -265,13 +276,6 @@ namespace AuthService.Endpoints
                         rating = await db.Users.Where(u => u.Id == userId).Select(u => u.Rating).FirstOrDefaultAsync();
                         cache.Set(key, rating, GetRatingTtl(config));
                     }
-                }
-
-                if (cityId.HasValue && string.IsNullOrWhiteSpace(cityName))
-                {
-                    cityName = await db.Cities.Where(c => c.Id == cityId.Value)
-                                              .Select(c => c.Name)
-                                              .FirstOrDefaultAsync();
                 }
 
                 var genderClaim = user.FindFirst("gender")?.Value;
@@ -295,7 +299,7 @@ namespace AuthService.Endpoints
                     UserName = user.Identity?.Name ?? string.Empty,
                     FirstName = user.FindFirstValue(ClaimTypes.GivenName) ?? string.Empty,
                     LastName = user.FindFirstValue(ClaimTypes.Surname) ?? string.Empty,
-                    CityId = cityId,
+                    CityExternalId = cityExternalId,
                     CityName = cityName,
                     Rating = rating,
                     Gender = gender,
@@ -334,7 +338,7 @@ namespace AuthService.Endpoints
                     Phone = user.PhoneNumber ?? string.Empty,
                     CreatedAt = user.CreatedAt,
                     IsOrganization = user.IsOrganization,
-                    CityId = user.CityId,
+                    CityExternalId = user.City?.ExternalId,
                     CityName = user.City?.Name,
                     Rating = user.Rating,
                     Gender = user.Gender,

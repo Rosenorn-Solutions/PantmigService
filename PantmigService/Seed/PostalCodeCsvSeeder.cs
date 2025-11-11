@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using PantmigService.Data;
 using PantmigService.Entities;
-using PantmigService.Utils.Helpers;
+using PantmigShared;
 using System.Text;
 
 namespace PantmigService.Seed
@@ -70,7 +70,7 @@ namespace PantmigService.Seed
                 var city = await db.Cities.FirstOrDefaultAsync(c => c.Slug == slug, ct);
                 if (city is null)
                 {
-                    city = new City { Name = cityName.Trim(), Slug = slug };
+                    city = new City { Name = cityName.Trim(), Slug = slug, ExternalId = CityKey.FromSlug(slug) };
                     db.Cities.Add(city);
                     await db.SaveChangesAsync(ct);
                 }
