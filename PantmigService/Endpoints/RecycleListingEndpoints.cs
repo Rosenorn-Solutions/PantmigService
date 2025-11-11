@@ -104,7 +104,8 @@ namespace PantmigService.Endpoints
                         try { cityId = await cityResolver.ResolveByExternalIdAsync(req.CityExternalId.Value, ctx.RequestAborted); }
                         catch (Exception ex)
                         {
-                            return Results.Problem(title: "Invalid search", detail: $"Unknown city: {ex.Message}", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
+                            logger.LogWarning(ex, "Failed to resolve city by external id: {CityExternalId}", req.CityExternalId);
+                            return Results.Problem(title: "Invalid search", detail: "Unknown city.", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
                         }
                     }
 
