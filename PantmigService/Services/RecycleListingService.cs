@@ -32,6 +32,8 @@ namespace PantmigService.Services
             _logger.LogInformation("Creating listing for user {UserId} with title {Title}", listing.CreatedByUserId, listing.Title);
             _db.RecycleListings.Add(listing);
             await _db.SaveChangesAsync(ct);
+            // Ensure City navigation is loaded so CityExternalId is available in responses
+            await _db.Entry(listing).Reference(l => l.City!).LoadAsync(ct);
             _logger.LogInformation("Listing {ListingId} created", listing.Id);
 
             // Invalidate caches related to listings
@@ -51,7 +53,11 @@ namespace PantmigService.Services
             }
 
             _logger.LogDebug("Retrieving listing {ListingId}", id);
-            var item = await _db.RecycleListings.AsNoTracking().Include(l => l.Items).Include(l => l.Images).FirstOrDefaultAsync(x => x.Id == id, ct);
+            var item = await _db.RecycleListings.AsNoTracking()
+                .Include(l => l.City)
+                .Include(l => l.Items)
+                .Include(l => l.Images)
+                .FirstOrDefaultAsync(x => x.Id == id, ct);
             if (item is not null)
             {
                 _cache.Set(key, item, ListingCacheTtl);
@@ -73,6 +79,7 @@ namespace PantmigService.Services
             var list = await _db.RecycleListings.AsNoTracking()
                 .Where(x => x.IsActive && (x.Status == ListingStatus.Created || x.Status == ListingStatus.PendingAcceptance))
                 .OrderByDescending(x => x.CreatedAt)
+                .Include(l => l.City)
                 .Include(l => l.Items)
                 .Include(l => l.Images)
                 .ToListAsync(ct);
@@ -100,6 +107,7 @@ namespace PantmigService.Services
             var total = await baseQuery.CountAsync(ct);
             var items = await baseQuery
                 .OrderByDescending(x => x.CreatedAt)
+                .Include(l => l.City)
                 .Include(l => l.Items)
                 .Include(l => l.Images)
                 .Skip((page -1) * pageSize)
@@ -124,6 +132,7 @@ namespace PantmigService.Services
             var list = await _db.RecycleListings.AsNoTracking()
                 .Where(x => x.CreatedByUserId == userId)
                 .OrderByDescending(x => x.CreatedAt)
+                .Include(l => l.City)
                 .Include(l => l.Items)
                 .Include(l => l.Images)
                 .ToListAsync(ct);
@@ -139,6 +148,7 @@ namespace PantmigService.Services
                 .AsNoTracking()
                 .Where(l => l.Applicants.Any(a => a.RecyclerUserId == recyclerUserId))
                 .OrderByDescending(x => x.CreatedAt)
+                .Include(l => l.City)
                 .Include(l => l.Items)
                 .Include(l => l.Images)
                 .ToListAsync(ct);
@@ -297,7 +307,7 @@ namespace PantmigService.Services
             _logger.LogDebug("Setting meeting point for listing {ListingId} by donator {Donator} to ({Lat},{Lon})", id, donatorUserId, latitude, longitude);
             if (latitude is < -90 or >90 || longitude is < -180 or >180)
             {
-                _logger.LogWarning("SetMeetingPoint failed: invalid coordinates for listing {ListingId}", id);
+                _logger.LogWarning("SetMeetingPoint failed: invalid coordinates for listing {ListingId}");
                 return false;
             }
             var listing = await _db.RecycleListings.FirstOrDefaultAsync(x => x.Id == id, ct);
@@ -473,6 +483,7 @@ namespace PantmigService.Services
 
             var list = await query
                 .OrderByDescending(l => l.CreatedAt)
+                .Include(l => l.City)
                 .Include(l => l.Items)
                 .Include(l => l.Images)
                 .ToListAsync(ct);
@@ -555,6 +566,7 @@ namespace PantmigService.Services
             var total = await unionQuery.CountAsync(ct);
             var items = await unionQuery
                 .OrderByDescending(l => l.CreatedAt)
+                .Include(l => l.City)
                 .Include(l => l.Items)
                 .Include(l => l.Images)
                 .Skip((page -1) * pageSize)

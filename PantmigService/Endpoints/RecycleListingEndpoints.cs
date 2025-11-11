@@ -282,7 +282,7 @@ namespace PantmigService.Endpoints
                     {
                         cityId = await cityResolver.ResolveByExternalIdAsync(cityExtFromHeader, ctx.RequestAborted);
                     }
-                    else if (Guid.TryParse(httpRequest.Form["CityExternalId"], out var cityExtFromForm))
+                    else if (httpRequest.HasFormContentType && Guid.TryParse(httpRequest.Form["CityExternalId"], out var cityExtFromForm))
                     {
                         cityId = await cityResolver.ResolveByExternalIdAsync(cityExtFromForm, ctx.RequestAborted);
                     }

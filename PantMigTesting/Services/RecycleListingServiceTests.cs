@@ -25,7 +25,16 @@ namespace PantMigTesting.Services
             var options = new DbContextOptionsBuilder<PantmigDbContext>()
                 .UseInMemoryDatabase(Guid.NewGuid().ToString())
                 .Options;
-            return new PantmigDbContext(options);
+            var db = new PantmigDbContext(options);
+            // Seed a city so service City load / external mapping does not leave null navigation
+            db.Cities.Add(new City
+            {
+                Name = "Copenhagen",
+                Slug = "copenhagen",
+                ExternalId = Guid.NewGuid()
+            });
+            db.SaveChanges();
+            return db;
         }
 
         private static RecycleListingService CreateService(PantmigDbContext db)
@@ -34,7 +43,7 @@ namespace PantMigTesting.Services
             return new RecycleListingService(db, NullLogger<RecycleListingService>.Instance, new TestNotifications(), cache);
         }
 
-        private static RecycleListing NewListing(string donatorId = "donator-1", DateTime? createdAt = null, bool isActive = true, ListingStatus status = ListingStatus.Created, int quantity = 50)
+        private static RecycleListing NewListing(string donatorId = "donator-1", DateTime? createdAt = null, bool isActive = true, ListingStatus status = ListingStatus.Created, int quantity = 50, int cityId = 1)
             => new()
             {
                 Title = "Cans",
@@ -47,7 +56,7 @@ namespace PantMigTesting.Services
                 CreatedAt = createdAt ?? DateTime.UtcNow,
                 IsActive = isActive,
                 Status = status,
-                CityId = 1,
+                CityId = cityId,
                 Items =
                 [
                     new() { MaterialType = RecycleMaterialType.Can, Quantity = quantity }
