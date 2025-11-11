@@ -31,6 +31,11 @@
 
   <ItemGroup>
     <Folder Include="Migrations\" />
+    <Folder Include="Utils\Helpers\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Pantmig.Shared\Pantmig.Shared.csproj" />
   </ItemGroup>
 
 </Project>

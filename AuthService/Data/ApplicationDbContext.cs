@@ -45,6 +45,10 @@ namespace AuthService.Data
                 .HasIndex(c => c.Slug)
                 .IsUnique();
 
+            builder.Entity<City>()
+                .HasIndex(c => c.ExternalId)
+                .IsUnique();
+
             // CityPostalCode: unique CityId+PostalCode and FK
             builder.Entity<CityPostalCode>()
                 .HasIndex(cp => new { cp.CityId, cp.PostalCode })

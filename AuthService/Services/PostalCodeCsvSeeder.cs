@@ -1,6 +1,6 @@
 ﻿using AuthService.Data;
 using AuthService.Entities;
-using AuthService.Utils;
+using PantmigShared;
 using Microsoft.EntityFrameworkCore;
 using System.Text;
 
@@ -61,7 +61,7 @@ namespace AuthService.Services
                 var city = await db.Cities.FirstOrDefaultAsync(c => c.Slug == slug, ct);
                 if (city is null)
                 {
-                    city = new City { Name = cityName.Trim(), Slug = slug };
+                    city = new City { Name = cityName.Trim(), Slug = slug, ExternalId = CityKey.FromSlug(slug) };
                     db.Cities.Add(city);
                     await db.SaveChangesAsync(ct);
                 }

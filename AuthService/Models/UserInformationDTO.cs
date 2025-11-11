@@ -12,7 +12,7 @@
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public bool IsOrganization { get; set; } = false;
 
-        public int? CityId { get; set; }
+        public Guid? CityExternalId { get; set; }
         public string? CityName { get; set; }
 
         public decimal Rating { get; set; }

@@ -34,6 +34,7 @@
   <ItemGroup>
     <Folder Include="Helpers\" />
     <Folder Include="Migrations\" />
+    <Folder Include="Utils\" />
     <Folder Include="wwwroot\" />
   </ItemGroup>
 
@@ -41,6 +42,10 @@
     <Content Include="postal_codes_da.csv" Condition="Exists('postal_codes_da.csv')">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Pantmig.Shared\Pantmig.Shared.csproj" />
   </ItemGroup>
 
 </Project>

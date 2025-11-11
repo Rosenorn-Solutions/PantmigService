@@ -27,6 +27,10 @@ namespace PantmigService.Data
                 .HasIndex(c => c.Slug)
                 .IsUnique();
 
+            modelBuilder.Entity<City>()
+                .HasIndex(c => c.ExternalId)
+                .IsUnique();
+
             modelBuilder.Entity<CityPostalCode>()
                 .HasIndex(cp => new { cp.CityId, cp.PostalCode })
                 .IsUnique();

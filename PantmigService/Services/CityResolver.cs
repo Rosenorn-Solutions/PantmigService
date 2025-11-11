@@ -1,7 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using PantmigService.Data;
 using PantmigService.Entities;
-using PantmigService.Utils.Helpers;
+using PantmigShared;
 
 namespace PantmigService.Services
 {
@@ -21,10 +21,17 @@ namespace PantmigService.Services
             var city = await _db.Cities.FirstOrDefaultAsync(c => c.Slug == slug, ct);
             if (city is null)
             {
-                city = new City { Name = input.Trim(), Slug = slug };
+                city = new City { Name = input.Trim(), Slug = slug, ExternalId = CityKey.FromSlug(slug) };
                 _db.Cities.Add(city);
                 await _db.SaveChangesAsync(ct);
             }
+            return city.Id;
+        }
+
+        public async Task<int> ResolveByExternalIdAsync(Guid externalId, CancellationToken ct = default)
+        {
+            var city = await _db.Cities.FirstOrDefaultAsync(c => c.ExternalId == externalId, ct);
+            if (city is null) throw new InvalidOperationException("Unknown city external id");
             return city.Id;
         }
     }

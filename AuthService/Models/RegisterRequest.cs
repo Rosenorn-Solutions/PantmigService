@@ -15,6 +15,8 @@
         public Gender Gender { get; set; } = Gender.Unknown;
         public DateOnly? BirthDate { get; set; }
 
+        // City selection
+        public Guid? CityExternalId { get; set; }
         // Optional: City (Bopæls by)
         public string? City { get; set; }
 
