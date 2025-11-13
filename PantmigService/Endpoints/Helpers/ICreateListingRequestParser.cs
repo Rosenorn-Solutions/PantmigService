@@ -13,6 +13,7 @@ public class ParseCreateListingResult
     public string? Title { get; init; }
     public string? Description { get; init; }
     public string? City { get; init; }
+    public Guid? CityExternalId { get; init; } // new: provided external id when JSON body contains it
     public string? Location { get; init; }
     public DateOnly AvailableFrom { get; init; }
     public DateOnly AvailableTo { get; init; }

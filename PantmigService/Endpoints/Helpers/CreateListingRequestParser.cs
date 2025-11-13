@@ -29,6 +29,10 @@ public class CreateListingRequestParser : ICreateListingRequestParser
             string? title = form["Title"].FirstOrDefault() ?? form["title"].FirstOrDefault();
             string? description = form["Description"].FirstOrDefault() ?? form["description"].FirstOrDefault();
             string? city = form["City"].FirstOrDefault() ?? form["city"].FirstOrDefault();
+            // CityExternalId may be given in form; attempt parse
+            Guid? cityExternalId = null;
+            if (Guid.TryParse(form["CityExternalId"].FirstOrDefault() ?? form["cityExternalId"].FirstOrDefault(), out var parsedExt))
+                cityExternalId = parsedExt;
             string? location = form["Location"].FirstOrDefault() ?? form["location"].FirstOrDefault();
 
             DateOnly.TryParse(form["AvailableFrom"].FirstOrDefault() ?? form["availableFrom"].FirstOrDefault(), out var availableFrom);
@@ -103,6 +107,7 @@ public class CreateListingRequestParser : ICreateListingRequestParser
                 Title = title,
                 Description = description,
                 City = city,
+                CityExternalId = cityExternalId,
                 Location = location,
                 AvailableFrom = availableFrom,
                 AvailableTo = availableTo,
@@ -126,6 +131,7 @@ public class CreateListingRequestParser : ICreateListingRequestParser
                     Title = body.Title,
                     Description = body.Description,
                     City = body.City,
+                    CityExternalId = body.CityExternalId,
                     Location = body.Location,
                     AvailableFrom = body.AvailableFrom,
                     AvailableTo = body.AvailableTo,

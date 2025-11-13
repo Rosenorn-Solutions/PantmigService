@@ -45,7 +45,7 @@ public class ListingImageCreationTests
         using var form = new MultipartFormDataContent();
         form.Add(new StringContent("Listing with images"), "Title");
         form.Add(new StringContent("Some description"), "Description");
-        form.Add(new StringContent("CPH"), "City");
+        form.Add(new StringContent("FACB9519-A654-9D5B-ADBA-25B9B6493EC1"), "CityExternalId");
         form.Add(new StringContent(DateOnly.FromDateTime(DateTime.UtcNow).ToString("O")), "AvailableFrom");
         form.Add(new StringContent(DateOnly.FromDateTime(DateTime.UtcNow.AddDays(4)).ToString("O")), "AvailableTo");
         // Items field as JSON
@@ -155,7 +155,7 @@ public class ListingImageCreationTests
         using var form = new MultipartFormDataContent();
         form.Add(new StringContent("Infected listing"), "Title");
         form.Add(new StringContent("Should be blocked"), "Description");
-        form.Add(new StringContent("CPH"), "City");
+        form.Add(new StringContent("facb9519-a654-9d5b-adba-25b9b6493ec1"), "CityExternalId");
         form.Add(new StringContent(DateTime.UtcNow.ToString("O")), "AvailableFrom");
         form.Add(new StringContent(DateTime.UtcNow.AddHours(1).ToString("O")), "AvailableTo");
         form.Add(new StringContent("[{\"Type\":3,\"Quantity\":1}]", Encoding.UTF8, "application/json"), "Items");

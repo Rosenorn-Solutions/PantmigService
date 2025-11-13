@@ -274,22 +274,27 @@ namespace PantmigService.Endpoints
 
                     var v = validation.Value!;
                     int cityId;
-                    if (Guid.TryParse(httpRequest.Query["cityExternalId"], out var cityExtFromQuery))
-                    {
-                        cityId = await cityResolver.ResolveByExternalIdAsync(cityExtFromQuery, ctx.RequestAborted);
-                    }
-                    else if (Guid.TryParse(httpRequest.Headers["X-City-ExternalId"], out var cityExtFromHeader))
-                    {
-                        cityId = await cityResolver.ResolveByExternalIdAsync(cityExtFromHeader, ctx.RequestAborted);
-                    }
-                    else if (httpRequest.HasFormContentType && Guid.TryParse(httpRequest.Form["CityExternalId"], out var cityExtFromForm))
-                    {
-                        cityId = await cityResolver.ResolveByExternalIdAsync(cityExtFromForm, ctx.RequestAborted);
-                    }
-                    else
-                    {
-                        cityId = await cityResolver.ResolveOrCreateAsync(v.CityInput, ctx.RequestAborted);
-                    }
+ if (Guid.TryParse(httpRequest.Query["cityExternalId"], out var cityExtFromQuery))
+ {
+ cityId = await cityResolver.ResolveByExternalIdAsync(cityExtFromQuery, ctx.RequestAborted);
+ }
+     else if (Guid.TryParse(httpRequest.Headers["X-City-ExternalId"], out var cityExtFromHeader))
+     {
+         cityId = await cityResolver.ResolveByExternalIdAsync(cityExtFromHeader, ctx.RequestAborted);
+     }
+     else if (httpRequest.HasFormContentType && Guid.TryParse(httpRequest.Form["CityExternalId"], out var cityExtFromForm))
+     {
+         cityId = await cityResolver.ResolveByExternalIdAsync(cityExtFromForm, ctx.RequestAborted);
+     }
+     else if (parseResult.CityExternalId.HasValue)
+     {
+         cityId = await cityResolver.ResolveByExternalIdAsync(parseResult.CityExternalId.Value, ctx.RequestAborted);
+     }
+     else
+     {
+         // No external id: treat missing city as validation error; do not create new cities.
+         return Results.Problem(title: "Validation error", detail: "City external id is required", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
+     }
 
                     var listing = new RecycleListing
                     {
