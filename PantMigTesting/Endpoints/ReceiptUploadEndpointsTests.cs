@@ -32,7 +32,7 @@ public class ReceiptUploadEndpointsTests
         {
             Title = "Cans",
             Description = "Bag of cans",
-            City = "CPH",
+            CityExternalId = "facb9519-a654-9d5b-adba-25b9b6493ec1",
             AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow),
             AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(2)),
             Items = new[] { new { Type = 3, Quantity = 50 } } // Can
@@ -133,7 +133,7 @@ public class ReceiptUploadEndpointsTests
         {
             Title = "E2E infected test",
             Description = "Should be blocked",
-            City = "CPH",
+            CityExternalId = "facb9519-a654-9d5b-adba-25b9b6493ec1",
             AvailableFrom = DateTime.UtcNow,
             AvailableTo = DateTime.UtcNow.AddHours(1),
             Items = new[] { new { Type = 3, Quantity = 1 } } // Can

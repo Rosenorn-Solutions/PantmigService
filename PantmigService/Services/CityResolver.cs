@@ -21,9 +21,8 @@ namespace PantmigService.Services
             var city = await _db.Cities.FirstOrDefaultAsync(c => c.Slug == slug, ct);
             if (city is null)
             {
-                city = new City { Name = input.Trim(), Slug = slug, ExternalId = CityKey.FromSlug(slug) };
-                _db.Cities.Add(city);
-                await _db.SaveChangesAsync(ct);
+                // Creation disabled in listing create flow; throw instead so caller returns validation error.
+                throw new InvalidOperationException("Unknown city: creation disabled");
             }
             return city.Id;
         }
