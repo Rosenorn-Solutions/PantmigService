@@ -66,7 +66,7 @@ namespace AuthService.Services
             var confirmUrl = $"{baseUrl.TrimEnd('/')}/auth/confirm-email-change?userId={Uri.EscapeDataString(user.Id)}&email={Uri.EscapeDataString(newEmail.Trim())}&token={tokenEnc}";
             try
             {
-                await _emailSender.SendAsync(newEmail.Trim(), "Bekræft din nye e-mail", "Klik for at bekræfte din e-mail ændring:\n" + confirmUrl, ct);
+                await _emailSender.SendAsync(newEmail.Trim(), "BekrÃ¦ft din nye e-mail", "Klik for at bekrÃ¦fte din e-mail Ã¦ndring:\n" + confirmUrl, ct);
             }
             catch { }
             res.Success = true; res.RequiresConfirmation = true; return res;
@@ -98,16 +98,25 @@ namespace AuthService.Services
                 var changeRes = await _userManager.ChangeEmailAsync(user, newEmail.Trim(), decodedToken);
                 if (!changeRes.Succeeded) { res.Success = false; res.ErrorMessage = string.Join("; ", changeRes.Errors.Select(e => e.Description)); return res; }
                 // After successful change email becomes unconfirmed; require normal email confirmation again
-                user.EmailConfirmed = false; await _userManager.UpdateAsync(user);
+                user.EmailConfirmed = false;
+                await _userManager.UpdateAsync(user);
                 res.Success = true; return res;
             }
-            catch (Exception ex) { res.Success = false; res.ErrorMessage = ex.Message; return res; }
-        }
+            catch (FormatException ex) { res.Success = false; res.ErrorMessage = "Invalid token format: " + ex.Message; return res; }
+            catch (ArgumentException ex) { res.Success = false; res.ErrorMessage = "Invalid argument: " + ex.Message; return res; }
+            catch (InvalidOperationException ex) { res.Success = false; res.ErrorMessage = "Operation error: " + ex.Message; return res; }
+            // Optionally, catch other specific exceptions as needed
+            // catch (SomeOtherException ex) { ... }
+            // If you still want a generic catch, consider logging or rethrowing
+            // catch (Exception ex) { /* log and/or rethrow */ }
         private async Task RevokeAllRefreshTokens(string userId, CancellationToken ct)
         {
             var tokens = await _db.RefreshTokens.Where(t => t.UserId == userId && t.Revoked == null && t.Expires > DateTime.UtcNow).ToListAsync(ct);
             var now = DateTime.UtcNow;
-            foreach (var t in tokens) { t.Revoked = now; }
+            foreach (var t in tokens)
+            {
+                t.Revoked = now;
+            }
             await _db.SaveChangesAsync(ct);
         }
     }
