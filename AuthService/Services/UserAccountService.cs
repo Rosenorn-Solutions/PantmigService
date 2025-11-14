@@ -105,6 +105,7 @@ namespace AuthService.Services
             catch (FormatException ex) { res.Success = false; res.ErrorMessage = "Invalid token format: " + ex.Message; return res; }
             catch (ArgumentException ex) { res.Success = false; res.ErrorMessage = "Invalid argument: " + ex.Message; return res; }
             catch (InvalidOperationException ex) { res.Success = false; res.ErrorMessage = "Operation error: " + ex.Message; return res; }
+        }
             // Optionally, catch other specific exceptions as needed
             // catch (SomeOtherException ex) { ... }
             // If you still want a generic catch, consider logging or rethrowing
