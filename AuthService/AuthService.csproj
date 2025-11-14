@@ -40,7 +40,6 @@
 
   <ItemGroup>
     <Folder Include="Helpers\" />
-    <Folder Include="Migrations\" />
     <Folder Include="wwwroot\" />
   </ItemGroup>
 

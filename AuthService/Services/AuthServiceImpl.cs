@@ -121,7 +121,7 @@ namespace AuthService.Services
                     .FirstOrDefaultAsync(u => u.UserName != null && u.UserName.ToUpperInvariant() == idUpper, ct);
             }
 
-            if (user == null)
+            if (user == null || user.IsDisabled)
                 return (false, null, null);
 
             var result = await signInManager.CheckPasswordSignInAsync(user, req.Password, lockoutOnFailure: true);

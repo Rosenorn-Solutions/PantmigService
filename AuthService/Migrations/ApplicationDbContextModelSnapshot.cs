@@ -57,6 +57,9 @@ namespace AuthService.Migrations
                     b.Property<int>("Gender")
                         .HasColumnType("int");
 
+                    b.Property<bool>("IsDisabled")
+                        .HasColumnType("bit");
+
                     b.Property<bool>("IsMitIdVerified")
                         .HasColumnType("bit");
 

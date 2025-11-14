@@ -29,7 +29,7 @@ namespace AuthService.Services
             var audience = jwtSection["Audience"];
             // Support both legacy and current key names
             var minutesString = jwtSection["AccessTokenExpirationMinutes"] ?? jwtSection["AccessTokenMinutes"];
-            var expires = DateTime.UtcNow.AddMinutes(int.TryParse(minutesString, out var m) ? m :60);
+            var expires = DateTime.UtcNow.AddMinutes(int.TryParse(minutesString, out var m) ? m : 60);
 
             var claims = new List<Claim>
             {
@@ -83,7 +83,7 @@ namespace AuthService.Services
             var token = GenerateRawRefreshToken();
             var jwtSection = _config.GetSection("JwtSettings");
             var refreshDaysString = jwtSection["RefreshTokenExpirationDays"] ?? jwtSection["RefreshTokenDays"];
-            var refreshDays = int.TryParse(refreshDaysString, out var d) ? d :30;
+            var refreshDays = int.TryParse(refreshDaysString, out var d) ? d : 30;
 
             var rt = new RefreshToken
             {
@@ -133,13 +133,13 @@ namespace AuthService.Services
 
                 // Load user
                 var user = await _db.Users.Include(u => u.City).FirstOrDefaultAsync(u => u.Id == userId, ct);
-                if (user is null) return (null, "User not found");
+                if (user is null || user.IsDisabled) return (null, "User not found or disabled");
 
                 // Generate new refresh token (rotation)
                 var newRtValue = GenerateRawRefreshToken();
                 var jwtSection = _config.GetSection("JwtSettings");
                 var refreshDaysString = jwtSection["RefreshTokenExpirationDays"] ?? jwtSection["RefreshTokenDays"];
-                var refreshDays = int.TryParse(refreshDaysString, out var rd) ? rd :30;
+                var refreshDays = int.TryParse(refreshDaysString, out var rd) ? rd : 30;
 
                 var newRt = new RefreshToken
                 {
