@@ -418,6 +418,55 @@ namespace AuthService.Endpoints
             })
             .Produces<UsersLookupResult>(StatusCodes.Status200OK, contentType: "application/json");
 
+            // New secured account management endpoints
+            group.MapPost("/change-password", async (ChangePasswordRequest req, ClaimsPrincipal principal, IUserAccountService accountService) =>
+            {
+                var userId = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? principal.FindFirstValue("sub") ?? string.Empty;
+                if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
+                var result = await accountService.ChangePasswordAsync(userId, req.OldPassword, req.NewPassword);
+                if (!result.Success) return Results.BadRequest(result);
+                return Results.Ok(result);
+            })
+            .RequireAuthorization()
+            .WithOpenApi(op => { op.OperationId = "Auth_ChangePassword"; op.Summary = "Change password"; op.Description = "Changes the authenticated user's password and rotates tokens."; return op; })
+            .Produces<ChangePasswordResult>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status401Unauthorized);
+            group.MapPost("/change-email", async (ChangeEmailRequest req, ClaimsPrincipal principal, IUserAccountService accountService) =>
+            {
+                var userId = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? principal.FindFirstValue("sub") ?? string.Empty;
+                if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
+                var result = await accountService.RequestEmailChangeAsync(userId, req.NewEmail, req.CurrentPassword);
+                if (!result.Success) return Results.BadRequest(result);
+                return Results.Ok(result);
+            })
+            .RequireAuthorization()
+            .WithOpenApi(op => { op.OperationId = "Auth_ChangeEmail"; op.Summary = "Request email change"; op.Description = "Initiates email change by sending a confirmation link to the new address."; return op; })
+            .Produces<ChangeEmailResult>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status401Unauthorized);
+            group.MapGet("/confirm-email-change", async (string userId, string email, string token, IUserAccountService accountService) =>
+            {
+                var result = await accountService.ConfirmEmailChangeAsync(userId, email, token);
+                if (!result.Success) return Results.BadRequest(result.ErrorMessage ?? "Failed");
+                return Results.Text("Email change confirmed.", "text/plain");
+            })
+            .WithOpenApi(op => { op.OperationId = "Auth_ConfirmEmailChange"; op.Summary = "Confirm email change"; op.Description = "Finalizes email change using token sent to new address."; return op; })
+            .Produces(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest);
+            group.MapPost("/disable-account", async (DisableAccountRequest req, ClaimsPrincipal principal, IUserAccountService accountService) =>
+            {
+                var userId = principal.FindFirstValue(ClaimTypes.NameIdentifier) ?? principal.FindFirstValue("sub") ?? string.Empty;
+                if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
+                var result = await accountService.DisableAccountAsync(userId, req.CurrentPassword, req.Reason);
+                if (!result.Success) return Results.BadRequest(result);
+                return Results.Ok(result);
+            })
+            .RequireAuthorization()
+            .WithOpenApi(op => { op.OperationId = "Auth_DisableAccount"; op.Summary = "Disable account"; op.Description = "Marks the authenticated user's account as disabled and revokes active tokens."; return op; })
+            .Produces<OperationResult>(StatusCodes.Status200OK)
+            .Produces(StatusCodes.Status400BadRequest)
+            .Produces(StatusCodes.Status401Unauthorized);
             return app;
         }
     }

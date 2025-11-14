@@ -32,5 +32,8 @@ namespace AuthService.Entities
         [Range(0, 5)]
         [Precision(3, 2)]
         public decimal Rating { get; set; } = 0m;
+
+        // Indicates a self-disabled account (soft delete / deactivation)
+        public bool IsDisabled { get; set; } = false;
     }
 }

@@ -96,6 +96,7 @@ public static class AuthTestServer
                 services.AddScoped<IUsernameGenerator, UsernameGenerator>();
                 services.AddScoped<IAuthService, AuthServiceImpl>();
                 services.AddSingleton<IEmailSender, DefaultCapturingEmailSender>();
+                services.AddScoped<IUserAccountService, UserAccountService>();
                 services.AddEndpointsApiExplorer();
             })
             .ConfigureTestServices(services =>
