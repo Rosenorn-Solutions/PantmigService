@@ -1,5 +1,6 @@
 using PantmigService.Entities;
 using Microsoft.EntityFrameworkCore;
+using PantmigService.Services; // for ApplicantInfo if needed later
 
 namespace PantmigService.Endpoints;
 
@@ -28,6 +29,8 @@ public record RecycleListingResponse
     public decimal? MeetingPointLongtitude { get; init; }
     public List<RecycleListingItemResponse> Items { get; init; } = [];
     public List<RecycleListingImageResponse> Images { get; init; } = [];
+    // New: list of applicant user ids (recyclers) who have applied for this listing
+    public List<string> ApplicantUserIds { get; init; } = [];
 }
 
 public static class RecycleListingMapper
@@ -54,7 +57,8 @@ public static class RecycleListingMapper
             MeetingPointLatitude = l.MeetingLatitude,
             MeetingPointLongtitude = l.MeetingLongitude,
             Items = [.. l.Items.Select(i => new RecycleListingItemResponse(i.Id, i.MaterialType, i.Quantity, i.DepositClass, i.EstimatedDepositPerUnit))],
-            Images = [.. l.Images.Select(img => new RecycleListingImageResponse(img.Id, img.FileName, img.ContentType, img.Order))]
+            Images = [.. l.Images.Select(img => new RecycleListingImageResponse(img.Id, img.FileName, img.ContentType, img.Order))],
+            ApplicantUserIds = l.Applicants is null ? [] : [.. l.Applicants.Select(a => a.RecyclerUserId)]
         };
 
     public static IEnumerable<RecycleListingResponse> ToResponse(this IEnumerable<RecycleListing> listings) => listings.Select(ToResponse);

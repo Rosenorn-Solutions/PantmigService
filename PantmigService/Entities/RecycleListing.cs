@@ -20,7 +20,6 @@ namespace PantmigService.Entities
         public string Description { get; set; } = string.Empty;
         public string Location { get; set; } = string.Empty;
         public decimal? EstimatedValue { get; set; }
-        // Availability date range (date-only now)
         public DateOnly AvailableFrom { get; set; }
         public DateOnly AvailableTo { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
