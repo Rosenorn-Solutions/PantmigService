@@ -21,7 +21,7 @@ namespace PantmigService.Endpoints
         public record MeetingPointRequest(int ListingId, decimal Latitude, decimal Longitude);
         public record CancelRequest(int ListingId);
         public record SearchRequest(Guid CityExternalId, bool OnlyActive = true);
-        public record PagedSearchRequest<T>(Guid? CityExternalId, int Page =1, int PageSize =20, bool OnlyActive = true, decimal? Latitude = null, decimal? Longitude = null);
+        public record PagedSearchRequest<T>(Guid? CityExternalId, int Page = 1, int PageSize = 20, bool OnlyActive = true, decimal? Latitude = null, decimal? Longitude = null);
 
         public static IEndpointRouteBuilder MapRecycleListingEndpoints(this IEndpointRouteBuilder app)
         {
@@ -36,9 +36,9 @@ namespace PantmigService.Endpoints
                 {
                     var p = page.GetValueOrDefault(1);
                     var ps = pageSize.GetValueOrDefault(20);
-                    if (p <=0) p =1;
-                    if (ps <=0) ps =20;
-                    if (ps >100) ps =100;
+                    if (p <= 0) p = 1;
+                    if (ps <= 0) ps = 20;
+                    if (ps > 100) ps = 100;
                     var data = await svc.GetActivePagedAsync(p, ps, ctx.RequestAborted);
                     var dto = data.Map(l => l.ToResponse());
                     return Results.Ok(dto);
@@ -80,11 +80,11 @@ namespace PantmigService.Endpoints
                         return Results.Problem(title: "Invalid search", detail: "Both latitude and longitude must be provided for coordinate search.", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
                     }
 
-                    if (req.Latitude.HasValue && (req.Latitude < -90 || req.Latitude >90))
+                    if (req.Latitude.HasValue && (req.Latitude < -90 || req.Latitude > 90))
                     {
                         return Results.Problem(title: "Invalid search", detail: "Latitude must be between -90 and90.", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
                     }
-                    if (req.Longitude.HasValue && (req.Longitude < -180 || req.Longitude >180))
+                    if (req.Longitude.HasValue && (req.Longitude < -180 || req.Longitude > 180))
                     {
                         return Results.Problem(title: "Invalid search", detail: "Longitude must be between -180 and180.", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
                     }
@@ -95,8 +95,8 @@ namespace PantmigService.Endpoints
                         return Results.Unauthorized();
                     }
 
-                    var pageVal = req.Page <=0 ?1 : req.Page;
-                    var pageSizeVal = req.PageSize <=0 ?20 : Math.Min(req.PageSize,100);
+                    var pageVal = req.Page <= 0 ? 1 : req.Page;
+                    var pageSizeVal = req.PageSize <= 0 ? 20 : Math.Min(req.PageSize, 100);
 
                     int? cityId = null;
                     if (req.CityExternalId.HasValue)
@@ -274,27 +274,27 @@ namespace PantmigService.Endpoints
 
                     var v = validation.Value!;
                     int cityId;
- if (Guid.TryParse(httpRequest.Query["cityExternalId"], out var cityExtFromQuery))
- {
- cityId = await cityResolver.ResolveByExternalIdAsync(cityExtFromQuery, ctx.RequestAborted);
- }
-     else if (Guid.TryParse(httpRequest.Headers["X-City-ExternalId"], out var cityExtFromHeader))
-     {
-         cityId = await cityResolver.ResolveByExternalIdAsync(cityExtFromHeader, ctx.RequestAborted);
-     }
-     else if (httpRequest.HasFormContentType && Guid.TryParse(httpRequest.Form["CityExternalId"], out var cityExtFromForm))
-     {
-         cityId = await cityResolver.ResolveByExternalIdAsync(cityExtFromForm, ctx.RequestAborted);
-     }
-     else if (parseResult.CityExternalId.HasValue)
-     {
-         cityId = await cityResolver.ResolveByExternalIdAsync(parseResult.CityExternalId.Value, ctx.RequestAborted);
-     }
-     else
-     {
-         // No external id: treat missing city as validation error; do not create new cities.
-         return Results.Problem(title: "Validation error", detail: "City external id is required", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
-     }
+                    if (Guid.TryParse(httpRequest.Query["cityExternalId"], out var cityExtFromQuery))
+                    {
+                        cityId = await cityResolver.ResolveByExternalIdAsync(cityExtFromQuery, ctx.RequestAborted);
+                    }
+                    else if (Guid.TryParse(httpRequest.Headers["X-City-ExternalId"], out var cityExtFromHeader))
+                    {
+                        cityId = await cityResolver.ResolveByExternalIdAsync(cityExtFromHeader, ctx.RequestAborted);
+                    }
+                    else if (httpRequest.HasFormContentType && Guid.TryParse(httpRequest.Form["CityExternalId"], out var cityExtFromForm))
+                    {
+                        cityId = await cityResolver.ResolveByExternalIdAsync(cityExtFromForm, ctx.RequestAborted);
+                    }
+                    else if (parseResult.CityExternalId.HasValue)
+                    {
+                        cityId = await cityResolver.ResolveByExternalIdAsync(parseResult.CityExternalId.Value, ctx.RequestAborted);
+                    }
+                    else
+                    {
+                        // No external id: treat missing city as validation error; do not create new cities.
+                        return Results.Problem(title: "Validation error", detail: "City external id is required", statusCode: StatusCodes.Status400BadRequest, instance: ctx.TraceIdentifier);
+                    }
 
                     var listing = new RecycleListing
                     {
@@ -389,7 +389,7 @@ namespace PantmigService.Endpoints
                 };
                 return op;
             })
-            .WithMetadata(new RequestSizeLimitAttribute(64L *1024 *1024))
+            .WithMetadata(new RequestSizeLimitAttribute(64L * 1024 * 1024))
             .Produces<RecycleListingResponse>(StatusCodes.Status201Created, contentType: "application/json")
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized);
