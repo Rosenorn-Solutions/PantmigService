@@ -24,7 +24,7 @@ public class ValidationServicesTests
     {
         var from = DateOnly.FromDateTime(DateTime.UtcNow.Date);
         var to = from.AddDays(1);
-        var res = _listingValidator.ValidateCreate(null, null, "City", null, from, to, null, null, new());
+        var res = _listingValidator.ValidateCreate(null, null, "City", "asd", from, to, null, null, new());
         Assert.False(res.IsValid);
         Assert.Equal("Validation error", res.Problem!.Title);
     }
@@ -35,7 +35,7 @@ public class ValidationServicesTests
         var from = DateOnly.FromDateTime(DateTime.UtcNow.Date);
         var to = from.AddDays(1);
         var items = new List<CreateListingItemInput> { new(RecycleMaterialType.Can, 1, null, null) };
-        var res = _listingValidator.ValidateCreate("Title", null, "City", null, from, to, null, null, items);
+        var res = _listingValidator.ValidateCreate("Title", null, "City", "asd", from, to, null, null, items);
         Assert.True(res.IsValid);
         Assert.Equal(string.Empty, res.Value!.Description);
     }
@@ -45,7 +45,7 @@ public class ValidationServicesTests
     {
         var from = DateOnly.FromDateTime(DateTime.UtcNow.Date);
         var to = from; // same day invalid per rule (must be after)
-        var res = _listingValidator.ValidateCreate("Title", "Desc", "City", null, from, to, null, null, []);
+        var res = _listingValidator.ValidateCreate("Title", "Desc", "City", "asd", from, to, null, null, []);
         Assert.False(res.IsValid);
         Assert.Contains("AvailableTo", res.Problem!.Detail);
     }
@@ -55,7 +55,7 @@ public class ValidationServicesTests
     {
         var from = DateOnly.FromDateTime(DateTime.UtcNow.Date);
         var to = from.AddDays(1);
-        var res = _listingValidator.ValidateCreate("T", "D", "City", null, from, to, null, null, new());
+        var res = _listingValidator.ValidateCreate("T", "D", "City", "asd", from, to, null, null, new());
         Assert.False(res.IsValid);
         Assert.Contains("At least one item", res.Problem!.Detail);
     }
@@ -66,7 +66,7 @@ public class ValidationServicesTests
         var from = DateOnly.FromDateTime(DateTime.UtcNow.Date);
         var to = from.AddDays(1);
         var items = new List<CreateListingItemInput> { new(RecycleMaterialType.Can, 0, null, null) };
-        var res = _listingValidator.ValidateCreate("T", "D", "City", null, from, to, null, null, items);
+        var res = _listingValidator.ValidateCreate("T", "D", "City", "asd", from, to, null, null, items);
         Assert.False(res.IsValid);
         Assert.Contains("greater than", res.Problem!.Detail);
     }
@@ -77,7 +77,7 @@ public class ValidationServicesTests
         var from = DateOnly.FromDateTime(DateTime.UtcNow.Date);
         var to = from.AddDays(1);
         var items = new List<CreateListingItemInput> { new(RecycleMaterialType.Can, 10_001, null, null) };
-        var res = _listingValidator.ValidateCreate("T", "D", "City", null, from, to, null, null, items);
+        var res = _listingValidator.ValidateCreate("T", "D", "City", "asd", from, to, null, null, items);
         Assert.False(res.IsValid);
         Assert.Contains("too large", res.Problem!.Detail);
     }
@@ -93,7 +93,7 @@ public class ValidationServicesTests
             new(RecycleMaterialType.PlasticBottle, 5, null, null),
             new(RecycleMaterialType.GlassBottle, 2, null, 1.25m)
         };
-        var res = _listingValidator.ValidateCreate("T", "D", "City", null, from, to, null, null, items);
+        var res = _listingValidator.ValidateCreate("T", "D", "City", "asd", from, to, null, null, items);
         Assert.True(res.IsValid);
         // 10*0.5 + 2*1.25 = 5 + 2.5 = 7.5
         Assert.Equal(7.5m, res.Value!.EstimatedValue);
@@ -105,7 +105,7 @@ public class ValidationServicesTests
         var from = DateOnly.FromDateTime(DateTime.UtcNow.Date);
         var to = from.AddDays(1);
         var items = new List<CreateListingItemInput> { new(RecycleMaterialType.Can, 1, null, null) };
-        var res = _listingValidator.ValidateCreate("T", "D", "City", null, from, to, 55.0m, null, items);
+        var res = _listingValidator.ValidateCreate("T", "D", "City", "asd", from, to, 55.0m, null, items);
         Assert.False(res.IsValid);
         Assert.Contains("latitude and longitude", res.Problem!.Detail);
     }
@@ -116,9 +116,9 @@ public class ValidationServicesTests
         var from = DateOnly.FromDateTime(DateTime.UtcNow.Date);
         var to = from.AddDays(1);
         var items = new List<CreateListingItemInput> { new(RecycleMaterialType.Can, 1, null, null) };
-        var resLat = _listingValidator.ValidateCreate("T", "D", "City", null, from, to, 100m, 10m, items);
+        var resLat = _listingValidator.ValidateCreate("T", "D", "City", "asd", from, to, 100m, 10m, items);
         Assert.False(resLat.IsValid);
-        var resLon = _listingValidator.ValidateCreate("T", "D", "City", null, from, to, 10m, 200m, items);
+        var resLon = _listingValidator.ValidateCreate("T", "D", "City", "asd", from, to, 10m, 200m, items);
         Assert.False(resLon.IsValid);
     }
 
@@ -128,7 +128,7 @@ public class ValidationServicesTests
         var from = DateOnly.FromDateTime(DateTime.UtcNow.Date);
         var to = from.AddDays(1);
         var items = new List<CreateListingItemInput> { new(RecycleMaterialType.Can, 1, null, null) };
-        var res = _listingValidator.ValidateCreate("T", "D", "City", null, from, to, 55.6761m, 12.5683m, items);
+        var res = _listingValidator.ValidateCreate("T", "D", "City", "asd", from, to, 55.6761m, 12.5683m, items);
         Assert.True(res.IsValid);
         Assert.Equal(55.6761m, res.Value!.Latitude);
         Assert.Equal(12.5683m, res.Value!.Longitude);

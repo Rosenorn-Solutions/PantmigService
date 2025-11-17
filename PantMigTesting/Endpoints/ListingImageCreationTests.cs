@@ -42,12 +42,15 @@ public class ListingImageCreationTests
         var imgBytes = BuildFakeJpeg();
         var imgBytes2 = BuildFakeJpeg();
 
-        using var form = new MultipartFormDataContent();
-        form.Add(new StringContent("Listing with images"), "Title");
-        form.Add(new StringContent("Some description"), "Description");
-        form.Add(new StringContent("FACB9519-A654-9D5B-ADBA-25B9B6493EC1"), "CityExternalId");
-        form.Add(new StringContent(DateOnly.FromDateTime(DateTime.UtcNow).ToString("O")), "AvailableFrom");
-        form.Add(new StringContent(DateOnly.FromDateTime(DateTime.UtcNow.AddDays(4)).ToString("O")), "AvailableTo");
+        using var form = new MultipartFormDataContent
+        {
+            { new StringContent("Listing with images"), "Title" },
+            { new StringContent("Some description"), "Description" },
+            { new StringContent("FACB9519-A654-9D5B-ADBA-25B9B6493EC1"), "CityExternalId" },
+            { new StringContent("Some location"), "Location" },
+            { new StringContent(DateOnly.FromDateTime(DateTime.UtcNow).ToString("O")), "AvailableFrom" },
+            { new StringContent(DateOnly.FromDateTime(DateTime.UtcNow.AddDays(4)).ToString("O")), "AvailableTo" }
+        };
         // Items field as JSON
         var itemsJson = "[{\"Type\":3,\"Quantity\":10}]"; // Type=3 (Can), Quantity=10
         form.Add(new StringContent(itemsJson, Encoding.UTF8, "application/json"), "Items");

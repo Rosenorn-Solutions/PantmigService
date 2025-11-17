@@ -21,6 +21,7 @@ public class StatisticsEndpointsTests
             Title = "Cans1",
             Description = "description",
             CityExternalId = "facb9519-a654-9d5b-adba-25b9b6493ec1",
+            Location = "street",
             AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow),
             AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)),
             Items = new[] { new { Type = 3, Quantity = 10 } }
@@ -33,6 +34,7 @@ public class StatisticsEndpointsTests
             Title = "Bottles2",
             Description = "description",
             CityExternalId = "facb9519-a654-9d5b-adba-25b9b6493ec1",
+            Location = "street",
             AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow),
             AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)),
             Items = new[] { new { Type = 1, Quantity = 5 } }
@@ -85,6 +87,7 @@ public class StatisticsEndpointsTests
             Title = "Mix1",
             Description = "description",
             CityExternalId = "facb9519-a654-9d5b-adba-25b9b6493ec1",
+            Location = "street",
             AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow),
             AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)),
             Items = new[] { new { Type = 1, Quantity = 3 }, new { Type = 3, Quantity = 7 } }
@@ -120,6 +123,7 @@ public class StatisticsEndpointsTests
             Title = "Mix2",
             Description = "Description",
             CityExternalId = "facb9519-a654-9d5b-adba-25b9b6493ec1",
+            Location = "street",
             AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow),
             AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)),
             Items = new[] { new { Type = 2, Quantity = 4 } }

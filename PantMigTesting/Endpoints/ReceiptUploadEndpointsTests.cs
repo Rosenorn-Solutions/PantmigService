@@ -32,6 +32,7 @@ public class ReceiptUploadEndpointsTests
         {
             Title = "Cans",
             Description = "Bag of cans",
+            Location = "street",
             CityExternalId = "facb9519-a654-9d5b-adba-25b9b6493ec1",
             AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow),
             AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(2)),

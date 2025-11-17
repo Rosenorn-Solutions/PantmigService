@@ -187,6 +187,7 @@ namespace PantMigTesting.Endpoints
                 Title = "Cans",
                 Description = "Bag of cans",
                 CityExternalId = "facb9519-a654-9d5b-adba-25b9b6493ec1",
+                Location = "street",
                 AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow),
                 AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(2)),
                 Items = new[] { new { Type =3, Quantity =100 } }
@@ -199,6 +200,7 @@ namespace PantMigTesting.Endpoints
                 Title = "Cans",
                 Description = "Bag of cans",
                 CityExternalId = "facb9519-a654-9d5b-adba-25b9b6493ec1",
+                Location = "street",
                 AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow),
                 AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(2)),
                 Items = new[] { new { Type =3, Quantity =100 } }
@@ -224,6 +226,7 @@ namespace PantMigTesting.Endpoints
                 Title = "Cans",
                 Description = "Bag of cans",
                 CityExternalId = "facb9519-a654-9d5b-adba-25b9b6493ec1",
+                Location = "street",
                 AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow),
                 AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(2)),
                 Items = new[] { new { Type = 3, Quantity = 50 } }
@@ -282,6 +285,7 @@ namespace PantMigTesting.Endpoints
                 Title = "Bottles",
                 Description = "Box of bottles",
                 CityExternalId = "facb9519-a654-9d5b-adba-25b9b6493ec1",
+                Location = "street",
                 AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow),
                 AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(2)),
                 Items = new[] { new { Type = 1, Quantity = 25 } }
@@ -322,6 +326,7 @@ namespace PantMigTesting.Endpoints
                 Title = "Cans to cancel",
                 Description = "Bag of cans",
                 CityExternalId = "facb9519-a654-9d5b-adba-25b9b6493ec1",
+                Location = "street",
                 AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow),
                 AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(2)),
                 Items = new[] { new { Type = 3, Quantity = 10 } }
@@ -368,12 +373,12 @@ namespace PantMigTesting.Endpoints
 
             // Create three listings in city1 with different states + one in city2
             client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
-            var l1Resp = await client.PostAsJsonAsync("/listings", new { Title = "L1", Description = "desc", CityExternalId = "facb9519-a654-9d5b-adba-25b9b6493ec1", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Items = new[] { new { Type = 3, Quantity = 5 } } });
+            var l1Resp = await client.PostAsJsonAsync("/listings", new { Title = "L1", Description = "desc", CityExternalId = "facb9519-a654-9d5b-adba-25b9b6493ec1", Location = "street", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Items = new[] { new { Type = 3, Quantity = 5 } } });
             l1Resp.EnsureSuccessStatusCode();
             var l1 = await l1Resp.Content.ReadFromJsonAsync<RecycleListingResponse>();
             Assert.NotNull(l1);
 
-            var l2Resp = await client.PostAsJsonAsync("/listings", new { Title = "L2", Description = "desc", CityExternalId = "facb9519-a654-9d5b-adba-25b9b6493ec1", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Items = new[] { new { Type = 3, Quantity = 6 } } });
+            var l2Resp = await client.PostAsJsonAsync("/listings", new { Title = "L2", Description = "desc", CityExternalId = "facb9519-a654-9d5b-adba-25b9b6493ec1", Location = "street", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Items = new[] { new { Type = 3, Quantity = 6 } } });
             l2Resp.EnsureSuccessStatusCode();
             var l2 = await l2Resp.Content.ReadFromJsonAsync<RecycleListingResponse>();
             Assert.NotNull(l2);
@@ -385,14 +390,14 @@ namespace PantMigTesting.Endpoints
 
             // Create another in same city and then cancel it to make inactive
             client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
-            var l3Resp = await client.PostAsJsonAsync("/listings", new { Title = "L3", Description = "desc", CityExternalId = "facb9519-a654-9d5b-adba-25b9b6493ec1", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Items = new[] { new { Type = 3, Quantity = 7 } } });
+            var l3Resp = await client.PostAsJsonAsync("/listings", new { Title = "L3", Description = "desc", CityExternalId = "facb9519-a654-9d5b-adba-25b9b6493ec1", Location = "street", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Items = new[] { new { Type = 3, Quantity = 7 } } });
             l3Resp.EnsureSuccessStatusCode();
             var l3 = await l3Resp.Content.ReadFromJsonAsync<RecycleListingResponse>();
             var cancelResp = await client.PostAsJsonAsync("/listings/cancel", new { ListingId = l3!.Id });
             cancelResp.EnsureSuccessStatusCode();
 
             // Create listing in a different city
-            var otherCityResp = await client.PostAsJsonAsync("/listings", new { Title = "OtherCity", Description = "desc", CityExternalId = "e21d5cb7-9f1a-4d8f-9e21-0f3f3a5d1234", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Items = new[] { new { Type = 3, Quantity = 1 } } });
+            var otherCityResp = await client.PostAsJsonAsync("/listings", new { Title = "OtherCity", Description = "desc", CityExternalId = "e21d5cb7-9f1a-4d8f-9e21-0f3f3a5d1234", Location = "street", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Items = new[] { new { Type = 3, Quantity = 1 } } });
             otherCityResp.EnsureSuccessStatusCode();
             var other = await otherCityResp.Content.ReadFromJsonAsync<RecycleListingResponse>();
 
@@ -416,10 +421,10 @@ namespace PantMigTesting.Endpoints
 
             // Create two listings in city1 and cancel one
             client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
-            var l1Resp = await client.PostAsJsonAsync("/listings", new { Title = "L1", Description = "desc", CityExternalId = "facb9519-a654-9d5b-adba-25b9b6493ec1", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Items = new[] { new { Type = 3, Quantity = 5 } } });
+            var l1Resp = await client.PostAsJsonAsync("/listings", new { Title = "L1", Description = "desc", CityExternalId = "facb9519-a654-9d5b-adba-25b9b6493ec1", Location = "street", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Items = new[] { new { Type = 3, Quantity = 5 } } });
             l1Resp.EnsureSuccessStatusCode();
             var l1 = await l1Resp.Content.ReadFromJsonAsync<RecycleListingResponse>();
-            var l2Resp = await client.PostAsJsonAsync("/listings", new { Title = "L2", Description = "desc", CityExternalId = "facb9519-a654-9d5b-adba-25b9b6493ec1", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Items = new[] { new { Type = 3, Quantity = 6 } } });
+            var l2Resp = await client.PostAsJsonAsync("/listings", new { Title = "L2", Description = "desc", CityExternalId = "facb9519-a654-9d5b-adba-25b9b6493ec1", Location = "street", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Items = new[] { new { Type = 3, Quantity = 6 } } });
             l2Resp.EnsureSuccessStatusCode();
             var l2 = await l2Resp.Content.ReadFromJsonAsync<RecycleListingResponse>();
 
@@ -444,10 +449,10 @@ namespace PantMigTesting.Endpoints
 
             // Create two listings in same city
             client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
-            var l1Resp = await client.PostAsJsonAsync("/listings", new { Title = "L1", Description = "desc", CityExternalId = "facb9519-a654-9d5b-adba-25b9b6493ec1", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Items = new[] { new { Type = 3, Quantity = 5 } } });
+            var l1Resp = await client.PostAsJsonAsync("/listings", new { Title = "L1", Description = "desc", CityExternalId = "facb9519-a654-9d5b-adba-25b9b6493ec1", Location = "street", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Items = new[] { new { Type = 3, Quantity = 5 } } });
             l1Resp.EnsureSuccessStatusCode();
             var l1 = await l1Resp.Content.ReadFromJsonAsync<RecycleListingResponse>();
-            var l2Resp = await client.PostAsJsonAsync("/listings", new { Title = "L2", Description = "desc", CityExternalId = "facb9519-a654-9d5b-adba-25b9b6493ec1", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Items = new[] { new { Type = 3, Quantity = 6 } } });
+            var l2Resp = await client.PostAsJsonAsync("/listings", new { Title = "L2", Description = "desc", CityExternalId = "facb9519-a654-9d5b-adba-25b9b6493ec1", Location = "street", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Items = new[] { new { Type = 3, Quantity = 6 } } });
             l2Resp.EnsureSuccessStatusCode();
             var l2 = await l2Resp.Content.ReadFromJsonAsync<RecycleListingResponse>();
 
@@ -477,6 +482,7 @@ namespace PantMigTesting.Endpoints
                 Title = "Cans",
                 Description = "Bag of cans",
                 CityExternalId = "facb9519-a654-9d5b-adba-25b9b6493ec1",
+                Location = "street",
                 AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow),
                 AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(2)),
                 Latitude =55.6761m,
@@ -498,11 +504,11 @@ namespace PantMigTesting.Endpoints
             client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
 
             // Create two listings with coordinates: one near, one far
-            var near = await client.PostAsJsonAsync("/listings", new { Title = "Near", Description = "desc", CityExternalId = "facb9519-a654-9d5b-adba-25b9b6493ec1", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Latitude =55.6761m, Longitude =12.5683m, Items = new[] { new { Type =3, Quantity =1 } } });
+            var near = await client.PostAsJsonAsync("/listings", new { Title = "Near", Description = "desc", CityExternalId = "facb9519-a654-9d5b-adba-25b9b6493ec1", Location = "street", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Latitude =55.6761m, Longitude =12.5683m, Items = new[] { new { Type =3, Quantity =1 } } });
             near.EnsureSuccessStatusCode();
             _ = await near.Content.ReadFromJsonAsync<RecycleListingResponse>();
 
-            var far = await client.PostAsJsonAsync("/listings", new { Title = "Far", Description = "desc", CityExternalId = "facb9519-a654-9d5b-adba-25b9b6493ec1", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Latitude =55.0m, Longitude =12.0m, Items = new[] { new { Type =3, Quantity =1 } } });
+            var far = await client.PostAsJsonAsync("/listings", new { Title = "Far", Description = "desc", CityExternalId = "facb9519-a654-9d5b-adba-25b9b6493ec1", Location = "street", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Latitude =55.0m, Longitude =12.0m, Items = new[] { new { Type =3, Quantity =1 } } });
             far.EnsureSuccessStatusCode();
             _ = await far.Content.ReadFromJsonAsync<RecycleListingResponse>();
 
@@ -525,12 +531,12 @@ namespace PantMigTesting.Endpoints
             client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
 
             // Create one listing in CPH without coordinates
-            var cph = await client.PostAsJsonAsync("/listings", new { Title = "CityOnly", Description = "desc", CityExternalId = "facb9519-a654-9d5b-adba-25b9b6493ec1", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Items = new[] { new { Type =3, Quantity =1 } } });
+            var cph = await client.PostAsJsonAsync("/listings", new { Title = "CityOnly", Description = "desc", CityExternalId = "facb9519-a654-9d5b-adba-25b9b6493ec1", Location = "street", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Items = new[] { new { Type =3, Quantity =1 } } });
             cph.EnsureSuccessStatusCode();
             var cphListing = await cph.Content.ReadFromJsonAsync<RecycleListingResponse>();
 
             // Another listing in other city but near coordinates
-            var aal = await client.PostAsJsonAsync("/listings", new { Title = "NearCoord", Description = "desc", CityExternalId = "e21d5cb7-9f1a-4d8f-9e21-0f3f3a5d1234", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Latitude =55.6762m, Longitude =12.5684m, Items = new[] { new { Type =3, Quantity =1 } } });
+            var aal = await client.PostAsJsonAsync("/listings", new { Title = "NearCoord", Description = "desc", CityExternalId = "e21d5cb7-9f1a-4d8f-9e21-0f3f3a5d1234", Location = "street", AvailableFrom = DateOnly.FromDateTime(DateTime.UtcNow), AvailableTo = DateOnly.FromDateTime(DateTime.UtcNow.AddDays(1)), Latitude =55.6762m, Longitude =12.5684m, Items = new[] { new { Type =3, Quantity =1 } } });
             aal.EnsureSuccessStatusCode();
             _ = await aal.Content.ReadFromJsonAsync<RecycleListingResponse>();
 
