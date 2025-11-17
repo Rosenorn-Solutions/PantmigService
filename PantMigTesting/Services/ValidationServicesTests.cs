@@ -24,9 +24,20 @@ public class ValidationServicesTests
     {
         var from = DateOnly.FromDateTime(DateTime.UtcNow.Date);
         var to = from.AddDays(1);
-        var res = _listingValidator.ValidateCreate(null, "desc", "City", null, from, to, null, null, new());
+        var res = _listingValidator.ValidateCreate(null, null, "City", null, from, to, null, null, new());
         Assert.False(res.IsValid);
         Assert.Equal("Validation error", res.Problem!.Title);
+    }
+
+    [Fact]
+    public void ValidateCreate_Allows_Empty_Description()
+    {
+        var from = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+        var to = from.AddDays(1);
+        var items = new List<CreateListingItemInput> { new(RecycleMaterialType.Can, 1, null, null) };
+        var res = _listingValidator.ValidateCreate("Title", null, "City", null, from, to, null, null, items);
+        Assert.True(res.IsValid);
+        Assert.Equal(string.Empty, res.Value!.Description);
     }
 
     [Fact]

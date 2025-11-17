@@ -15,8 +15,9 @@ public class RecycleListingValidationService : IRecycleListingValidationService
         decimal? longitude,
         List<CreateListingItemInput>? items)
     {
-        if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(description))
-            return ValidationResult<CreateListingValidated>.Failure("Validation error", "Title and Description are required", StatusCodes.Status400BadRequest);
+        // Title required; description optional
+        if (string.IsNullOrWhiteSpace(title))
+            return ValidationResult<CreateListingValidated>.Failure("Validation error", "Title is required", StatusCodes.Status400BadRequest);
 
         // With external-id now provided separately we no longer fall back to location text as city input.
         // City name is optional when a cityExternalId is provided upstream; we validate later when mapping resolver.
@@ -68,10 +69,14 @@ public class RecycleListingValidationService : IRecycleListingValidationService
             estimatedValue = sum;
         }
 
+        var sanitizedTitle = title!.Trim();
+        var sanitizedDescription = string.IsNullOrWhiteSpace(description) ? string.Empty : description!.Trim();
+        var sanitizedCity = cityInput.Trim();
+
         return ValidationResult<CreateListingValidated>.Success(new CreateListingValidated(
-            title.Trim(),
-            description.Trim(),
-            cityInput.Trim(),
+            sanitizedTitle,
+            sanitizedDescription,
+            sanitizedCity,
             availableFrom,
             availableTo,
             latitude,

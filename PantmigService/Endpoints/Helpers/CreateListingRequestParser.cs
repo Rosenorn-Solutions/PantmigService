@@ -105,7 +105,7 @@ public class CreateListingRequestParser : ICreateListingRequestParser
             return new ParseCreateListingResult
             {
                 Title = title,
-                Description = description,
+                Description = string.IsNullOrWhiteSpace(description) ? null : description,
                 City = city,
                 CityExternalId = cityExternalId,
                 Location = location,
@@ -129,7 +129,7 @@ public class CreateListingRequestParser : ICreateListingRequestParser
                 return new ParseCreateListingResult
                 {
                     Title = body.Title,
-                    Description = body.Description,
+                    Description = string.IsNullOrWhiteSpace(body.Description) ? null : body.Description,
                     City = body.City,
                     CityExternalId = body.CityExternalId,
                     Location = body.Location,
