@@ -19,6 +19,9 @@ public class RecycleListingValidationService : IRecycleListingValidationService
         if (string.IsNullOrWhiteSpace(title))
             return ValidationResult<CreateListingValidated>.Failure("Validation error", "Title is required", StatusCodes.Status400BadRequest);
 
+        if (string.IsNullOrWhiteSpace(location))
+            return ValidationResult<CreateListingValidated>.Failure("Validation error", "Location is required", StatusCodes.Status400BadRequest);
+
         // With external-id now provided separately we no longer fall back to location text as city input.
         // City name is optional when a cityExternalId is provided upstream; we validate later when mapping resolver.
         var cityInput = city; // remove location fallback
@@ -77,6 +80,7 @@ public class RecycleListingValidationService : IRecycleListingValidationService
             sanitizedTitle,
             sanitizedDescription,
             sanitizedCity,
+            location,
             availableFrom,
             availableTo,
             latitude,

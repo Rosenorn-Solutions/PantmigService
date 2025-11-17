@@ -24,6 +24,7 @@ public record CreateListingValidated(
     string Title,
     string Description,
     string CityInput,
+    string Location,
     DateOnly AvailableFrom,
     DateOnly AvailableTo,
     decimal? Latitude,
