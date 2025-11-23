@@ -10,28 +10,37 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Serilog;
+using Serilog.Core; // added
+using Serilog.Events; // added
+using AuthService.Logging; // added
+using AuthService.Seed; // added
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Only configure Serilog sinks in code, not in appsettings.json
+// Cache configuration
+var configuration = builder.Configuration;
+var jwtSettings = configuration.GetSection("JwtSettings");
+
+// Level switches
+var consoleLevelSwitch = new LoggingLevelSwitch(LogEventLevel.Debug);
+
+// Minimal bootstrap logger (console only)
 Log.Logger = new LoggerConfiguration()
-    .ReadFrom.Configuration(builder.Configuration)
+    .MinimumLevel.ControlledBy(consoleLevelSwitch)
     .Enrich.FromLogContext()
-    .WriteTo.Console()
-    .WriteTo.MSSqlServer(
-        connectionString: builder.Configuration.GetConnectionString("PantmigConnection")!,
-        sinkOptions: new Serilog.Sinks.MSSqlServer.MSSqlServerSinkOptions
-        {
-            TableName = "Logs",
-            AutoCreateSqlTable = true
-        })
+    .WriteTo.Console(levelSwitch: consoleLevelSwitch)
     .CreateLogger();
 
 builder.Host.UseSerilog();
 
+// Deferred MSSql sink hosted service & seeding hosted service
+builder.Services.AddSingleton(consoleLevelSwitch);
+builder.Services.AddHostedService<DeferredSqlLoggerInitializer>();
+builder.Services.AddHostedService<StartupSeedingHostedService>();
+
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("PantmigConnection")));
+    options.UseSqlServer(configuration.GetConnectionString("PantmigConnection")));
 
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 {
@@ -43,12 +52,10 @@ builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
     options.Lockout.MaxFailedAccessAttempts = 5;
     options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
     options.User.RequireUniqueEmail = true;
-    // Use default AllowedUserNameCharacters; do not include locale-specific letters
 })
 .AddEntityFrameworkStores<ApplicationDbContext>()
 .AddDefaultTokenProviders();
 
-var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 var secretKey = jwtSettings["SecretKey"];
 var issuer = jwtSettings["Issuer"];
 var audience = jwtSettings["Audience"];
@@ -75,43 +82,29 @@ builder.Services.AddAuthentication(options =>
 
 builder.Services.AddAuthorization(options =>
 {
-    // Optional: policy that mirrors the test policy using role claim
     options.AddPolicy("VerifiedDonator", policy =>
     {
         policy.RequireAuthenticatedUser();
         policy.RequireRole(nameof(UserType.Donator));
-        //policy.RequireAssertion(ctx =>
-        //{
-        //    var verified = ctx.User.FindFirst("isMitIdVerified")?.Value;
-        //    return string.Equals(verified, bool.TrueString, StringComparison.OrdinalIgnoreCase);
-        //});
     });
 });
 
-// Memory cache for ratings and small profile data
 builder.Services.AddMemoryCache();
-
 builder.Services.AddHttpClient();
 builder.Services.AddEndpointsApiExplorer();
 
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "AuthService API", Version = "v1" });
-
-    // Define the security scheme for JWT Bearer tokens
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
-        Description = @"JWT Authorization header using the Bearer scheme.
-                      Enter 'Bearer' [space] and then your token in the text input below.
-                      Example: 'Bearer 12345abcdef'",
+        Description = "JWT Authorization header using the Bearer scheme. Enter 'Bearer' + token.",
         Name = "Authorization",
         In = ParameterLocation.Header,
         Type = SecuritySchemeType.ApiKey,
         Scheme = "Bearer"
     });
-
-    // Add security requirement to operations that use the "Bearer" scheme
-    c.AddSecurityRequirement(new OpenApiSecurityRequirement()
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
     {
         {
             new OpenApiSecurityScheme
@@ -130,18 +123,15 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-// CORS configuration: read allowed origins from configuration
-var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
+// CORS configuration
+var allowedOrigins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
 
 bool IsOriginAllowed(string origin)
 {
     if (!Uri.TryCreate(origin, UriKind.Absolute, out var o)) return false;
-
     foreach (var pattern in allowedOrigins)
     {
         if (string.IsNullOrWhiteSpace(pattern)) continue;
-
-        // Wildcard subdomain support like https://*.pantmig.dk
         if (pattern.Contains("*"))
         {
             if (pattern.StartsWith("https://*.", StringComparison.OrdinalIgnoreCase))
@@ -156,19 +146,14 @@ bool IsOriginAllowed(string origin)
             }
             continue;
         }
-
         if (Uri.TryCreate(pattern, UriKind.Absolute, out var p))
         {
             var schemeOk = string.Equals(o.Scheme, p.Scheme, StringComparison.OrdinalIgnoreCase);
             var hostOk = string.Equals(o.Host, p.Host, StringComparison.OrdinalIgnoreCase);
-            var portOk = p.IsDefaultPort || p.Port == -1 || p.Port == o.Port; // allow any port if not specified
-            if (schemeOk && hostOk && portOk)
-            {
-                return true;
-            }
+            var portOk = p.IsDefaultPort || p.Port == -1 || p.Port == o.Port;
+            if (schemeOk && hostOk && portOk) return true;
         }
     }
-
     return false;
 }
 
@@ -176,10 +161,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("ConfiguredCors", policy =>
     {
-        policy
-            .AllowAnyHeader()
-            .AllowAnyMethod()
-            .SetIsOriginAllowed(IsOriginAllowed);
+        policy.AllowAnyHeader().AllowAnyMethod().SetIsOriginAllowed(IsOriginAllowed);
     });
 });
 
@@ -193,58 +175,20 @@ builder.Services.AddScoped<IUserAccountService, UserAccountService>();
 
 var app = builder.Build();
 
-// Seed Identity roles on startup
-using (var scope = app.Services.CreateScope())
-{
-    var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
-    foreach (var roleName in new[] { nameof(UserType.Donator), nameof(UserType.Recycler) })
-    {
-        if (!await roleManager.RoleExistsAsync(roleName))
-        {
-            await roleManager.CreateAsync(new IdentityRole(roleName));
-        }
-    }
-}
-
-// Optional CSV seed of postal codes at startup
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    // Use ContentRootPath so we can read the CSV from the project directory without copying to bin
-    var csvPath = Path.Combine(app.Environment.ContentRootPath, "postal_codes_da.csv");
-    try
-    {
-        if (!File.Exists(csvPath))
-        {
-            Log.Information("Postal code CSV not found at {CsvPath}. Skipping postal seed.", csvPath);
-        }
-        else
-        {
-            await PostalCodeCsvSeeder.SeedAsync(db, csvPath);
-            Log.Information("PostalCodeCsvSeeder executed for {CsvPath}", csvPath);
-        }
-    }
-    catch (Exception ex)
-    {
-        Log.Warning(ex, "PostalCodeCsvSeeder failed");
-    }
-}
-
 app.UseForwardedHeaders(new ForwardedHeadersOptions
 {
     ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost
 });
 
 app.UseCors("ConfiguredCors");
-
 app.UseSwagger();
 app.UseSwaggerUI();
-
 app.UseHttpsRedirection();
-
 app.UseAuthentication();
 app.UseAuthorization();
-
 app.MapAuthEndpoints();
+
+// Reduce console verbosity after startup
+consoleLevelSwitch.MinimumLevel = LogEventLevel.Information;
 
 app.Run();

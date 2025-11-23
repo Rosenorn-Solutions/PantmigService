@@ -10,7 +10,10 @@ using PantmigService.Hubs;
 using PantmigService.Security;
 using PantmigService.Seed;
 using PantmigService.Services;
+using PantmigService.Logging; // added
 using Serilog;
+using Serilog.Core; // added
+using Serilog.Events; // added
 using System.Text;
 
 namespace PantmigService
@@ -21,20 +24,28 @@ namespace PantmigService
         {
             var builder = WebApplication.CreateBuilder(args);
 
+            // Cache configuration sections once
+            var configuration = builder.Configuration;
+            var jwtSettings = configuration.GetSection("JwtSettings");
+
+            // Level switches allow dynamic adjustment
+            var consoleLevelSwitch = new LoggingLevelSwitch(LogEventLevel.Debug); // verbose during startup
+            var sqlLevelSwitch = new LoggingLevelSwitch(LogEventLevel.Information);
+
+            // Minimal bootstrap logger (console only)
             Log.Logger = new LoggerConfiguration()
-                .ReadFrom.Configuration(builder.Configuration)
+                .MinimumLevel.ControlledBy(consoleLevelSwitch)
                 .Enrich.FromLogContext()
-                .WriteTo.Console()
-                .WriteTo.MSSqlServer(
-                    connectionString: builder.Configuration.GetConnectionString("PantmigConnection")!,
-                    sinkOptions: new Serilog.Sinks.MSSqlServer.MSSqlServerSinkOptions
-                    {
-                        TableName = "Logs",
-                        AutoCreateSqlTable = true
-                    })
+                .WriteTo.Console(levelSwitch: consoleLevelSwitch)
                 .CreateLogger();
 
             builder.Host.UseSerilog();
+
+            // Register level switches & deferred initializer
+            builder.Services.AddSingleton(consoleLevelSwitch);
+            builder.Services.AddSingleton(sqlLevelSwitch);
+            builder.Services.AddHostedService<DeferredSqlLoggerInitializer>();
+            builder.Services.AddHostedService<PostalCodeSeedingHostedService>(); // added hosted seeding
 
             const long MaxRequestBytes = 64L * 1024 * 1024;
             builder.WebHost.ConfigureKestrel(options =>
@@ -57,7 +68,8 @@ namespace PantmigService
                     });
                 });
 
-            var allowedOrigins = builder.Configuration
+            // Cache allowed origins once
+            var allowedOrigins = configuration
                 .GetSection("Cors:AllowedOrigins")
                 .GetChildren()
                 .Select(c => c.Value)
@@ -87,7 +99,6 @@ namespace PantmigService
                 });
             });
 
-            var jwtSettings = builder.Configuration.GetSection("JwtSettings");
             var secretKey = jwtSettings["SecretKey"];
             var issuer = jwtSettings["Issuer"];
             var audience = jwtSettings["Audience"];
@@ -159,7 +170,7 @@ namespace PantmigService
             });
 
             builder.Services.AddDbContext<PantmigDbContext>(opt =>
-                opt.UseSqlServer(builder.Configuration.GetConnectionString("PantmigConnection")));
+                opt.UseSqlServer(configuration.GetConnectionString("PantmigConnection")));
 
             builder.Services.AddScoped<IRecycleListingService, RecycleListingService>();
             builder.Services.AddScoped<ICityResolver, CityResolver>();
@@ -171,30 +182,14 @@ namespace PantmigService
             builder.Services.AddScoped<INotificationService, NotificationService>();
             builder.Services.AddSingleton<IEmailSender, SmtpEmailSender>();
 
-            var clamSection = builder.Configuration.GetSection("ClamAV");
+            var clamSection = configuration.GetSection("ClamAV");
             var clamOptions = clamSection.Get<ClamAvOptions>() ?? new ClamAvOptions();
             builder.Services.AddSingleton<IAntivirusScanner>(_ => new ClamAvAntivirusScanner(clamOptions));
 
             builder.Services.AddSignalR();
-
-            // In-memory caching for read-heavy endpoints
             builder.Services.AddMemoryCache();
 
             var app = builder.Build();
-
-            using (var scope = app.Services.CreateScope())
-            {
-                var db = scope.ServiceProvider.GetRequiredService<PantmigDbContext>();
-                var csvPath = Path.Combine(AppContext.BaseDirectory, "postal_codes_da.csv");
-                try
-                {
-                    PostalCodeCsvSeeder.SeedAsync(db, csvPath).GetAwaiter().GetResult();
-                }
-                catch (Exception ex)
-                {
-                    Log.Warning(ex, "PostalCodeCsvSeeder failed");
-                }
-            }
 
             if (app.Environment.IsDevelopment())
             {
@@ -202,10 +197,11 @@ namespace PantmigService
                 app.UseSwaggerUI();
             }
 
+            // Drop console verbosity after startup
+            consoleLevelSwitch.MinimumLevel = LogEventLevel.Information;
+
             app.UseHttpsRedirection();
-
             app.UseCors("FrontendCors");
-
             app.UseAuthentication();
             app.UseAuthorization();
 
