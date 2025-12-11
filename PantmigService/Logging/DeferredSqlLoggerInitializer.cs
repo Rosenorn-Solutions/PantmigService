@@ -17,7 +17,7 @@ namespace PantmigService.Logging
     {
         private readonly IConfiguration _configuration;
         private readonly IHostEnvironment _env;
-        private readonly LoggingLevelSwitch _sqlLevelSwitch; // retained for potential dynamic adjustments
+        private readonly LoggingLevelSwitch _sqlLevelSwitch; 
         private readonly LoggingLevelSwitch _consoleLevelSwitch;
 
         public DeferredSqlLoggerInitializer(
@@ -34,7 +34,6 @@ namespace PantmigService.Logging
 
         public Task StartAsync(CancellationToken cancellationToken)
         {
-            // Only add MSSql sink in Production (can be adjusted if needed)
             if (!_env.IsProduction()) return Task.CompletedTask;
             var conn = _configuration.GetConnectionString("PantmigConnection");
             if (string.IsNullOrWhiteSpace(conn)) return Task.CompletedTask;
@@ -42,7 +41,7 @@ namespace PantmigService.Logging
             try
             {
                 var logger = new LoggerConfiguration()
-                    .MinimumLevel.ControlledBy(_consoleLevelSwitch) // global control
+                    .MinimumLevel.ControlledBy(_consoleLevelSwitch) 
                     .Enrich.FromLogContext()
                     .WriteTo.Console(levelSwitch: _consoleLevelSwitch)
                     .WriteTo.MSSqlServer(
@@ -50,19 +49,18 @@ namespace PantmigService.Logging
                         sinkOptions: new MSSqlServerSinkOptions
                         {
                             TableName = "Logs",
-                            AutoCreateSqlTable = false, // assume table already created
+                            AutoCreateSqlTable = false, 
                             BatchPostingLimit = 200,
                             BatchPeriod = System.TimeSpan.FromSeconds(10)
                         },
-                        restrictedToMinimumLevel: LogEventLevel.Information
+                        restrictedToMinimumLevel: LogEventLevel.Warning
                     )
                     .CreateLogger();
 
-                Log.Logger = logger; // swap global logger
+                Log.Logger = logger; 
             }
             catch (System.Exception ex)
             {
-                // Fall back silently; keep console-only logger
                 Log.Warning(ex, "Deferred MSSqlServer logger initialization failed; continuing with console only.");
             }
             return Task.CompletedTask;

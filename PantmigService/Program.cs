@@ -10,10 +10,10 @@ using PantmigService.Hubs;
 using PantmigService.Security;
 using PantmigService.Seed;
 using PantmigService.Services;
-using PantmigService.Logging; // added
+using PantmigService.Logging;
 using Serilog;
-using Serilog.Core; // added
-using Serilog.Events; // added
+using Serilog.Core;
+using Serilog.Events;
 using System.Text;
 
 namespace PantmigService
@@ -30,7 +30,7 @@ namespace PantmigService
 
             // Level switches allow dynamic adjustment
             var consoleLevelSwitch = new LoggingLevelSwitch(LogEventLevel.Debug); // verbose during startup
-            var sqlLevelSwitch = new LoggingLevelSwitch(LogEventLevel.Information);
+            var sqlLevelSwitch = new LoggingLevelSwitch(LogEventLevel.Warning);
 
             // Minimal bootstrap logger (console only)
             Log.Logger = new LoggerConfiguration()
@@ -45,7 +45,7 @@ namespace PantmigService
             builder.Services.AddSingleton(consoleLevelSwitch);
             builder.Services.AddSingleton(sqlLevelSwitch);
             builder.Services.AddHostedService<DeferredSqlLoggerInitializer>();
-            builder.Services.AddHostedService<PostalCodeSeedingHostedService>(); // added hosted seeding
+            builder.Services.AddHostedService<PostalCodeSeedingHostedService>(); 
 
             const long MaxRequestBytes = 64L * 1024 * 1024;
             builder.WebHost.ConfigureKestrel(options =>
