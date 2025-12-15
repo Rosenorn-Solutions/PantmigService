@@ -80,65 +80,46 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-builder.Services.AddAuthorization(options =>
-{
-    options.AddPolicy("VerifiedDonator", policy =>
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy("VerifiedDonator", policy =>
     {
         policy.RequireAuthenticatedUser();
         policy.RequireRole(nameof(UserType.Donator));
     });
-});
 
 builder.Services.AddMemoryCache();
 builder.Services.AddHttpClient();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddOpenApi();
 
-// CORS configuration
-var allowedOrigins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
+// Cache allowed origins once
+var allowedOrigins = configuration
+    .GetSection("Cors:AllowedOrigins")
+    .GetChildren()
+    .Select(c => c.Value)
+    .Where(v => !string.IsNullOrWhiteSpace(v))
+    .Cast<string>()
+    .ToArray();
 
-    });
-});
-
-// CORS configuration: read allowed origins from configuration
-var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
-
-bool IsOriginAllowed(string origin)
+if (allowedOrigins.Length == 0)
 {
-    if (!Uri.TryCreate(origin, UriKind.Absolute, out var o)) return false;
-    foreach (var pattern in allowedOrigins)
-    {
-        if (string.IsNullOrWhiteSpace(pattern)) continue;
-        if (pattern.Contains("*"))
-        {
-            if (pattern.StartsWith("https://*.", StringComparison.OrdinalIgnoreCase))
-            {
-                var domain = pattern.Substring("https://*.".Length);
-                if (string.Equals(o.Scheme, "https", StringComparison.OrdinalIgnoreCase) &&
-                    (string.Equals(o.Host, domain, StringComparison.OrdinalIgnoreCase) ||
-                     o.Host.EndsWith("." + domain, StringComparison.OrdinalIgnoreCase)))
-                {
-                    return true;
-                }
-            }
-            var portOk = p.IsDefaultPort || p.Port == -1 || p.Port == o.Port;
-            if (schemeOk && hostOk && portOk) return true;
-        }
-    }
-            {
-                return true;
-            }
-        }
-    }
-
-    return false;
+    allowedOrigins =
+    [
+        "http://localhost:8081",
+        "https://localhost:8081",
+        "http://127.0.0.1:8081",
+        "https://127.0.0.1:8081"
+    ];
 }
 
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("ConfiguredCors", policy =>
+    options.AddPolicy("FrontendCors", policy =>
     {
-        policy.AllowAnyHeader().AllowAnyMethod().SetIsOriginAllowed(IsOriginAllowed);
+        policy.WithOrigins(allowedOrigins)
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
     });
 });
 
@@ -157,10 +138,7 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
 }
 
-app.UseCors("ConfiguredCors");
-
-app.UseSwagger();
-app.UseSwaggerUI();
+app.UseCors("FrontendCors");
 
 app.UseHttpsRedirection();
 app.UseAuthentication();
