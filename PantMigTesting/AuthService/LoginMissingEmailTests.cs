@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.TestHost;
 using System.Net;
 using System.Net.Http.Json;
 using AuthService.Models;
@@ -10,8 +11,8 @@ public class LoginMissingEmailTests
  [Fact]
  public async Task Login_WithNonExistingEmail_Returns401_Not500()
  {
- using var server = AuthTestServer.Create();
- using var client = server.CreateClient();
+ using var host = AuthTestServer.Create();
+ using var client = host.GetTestClient();
 
  var req = new LoginRequest
  {

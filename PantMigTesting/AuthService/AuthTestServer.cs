@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 using System.Collections.Concurrent;
 using System.Text;
@@ -30,9 +31,9 @@ public static class AuthTestServer
         }
     }
 
-    public static TestServer Create() => Create(configureTestServices: null);
+    public static IHost Create() => Create(configureTestServices: null);
 
-    public static TestServer Create(Action<IServiceCollection>? configureTestServices)
+    public static IHost Create(Action<IServiceCollection>? configureTestServices)
     {
         var inMemorySettings = new Dictionary<string, string?>
         {
@@ -49,72 +50,76 @@ public static class AuthTestServer
         var dbName = Guid.NewGuid().ToString();
         DefaultCapturingEmailSender.Clear();
 
-        var builder = new WebHostBuilder()
-            .ConfigureAppConfiguration(cfg => cfg.AddInMemoryCollection(inMemorySettings))
-            .ConfigureServices((context, services) =>
+        var hostBuilder = new HostBuilder()
+            .ConfigureWebHost(webHost =>
             {
-                var config = context.Configuration;
-                var secret = config["JwtSettings:SecretKey"]!;
-                var issuer = config["JwtSettings:Issuer"]!;
-                var audience = config["JwtSettings:Audience"]!;
-
-                services.AddRouting();
-                services.AddDataProtection();
-                services.AddDbContext<ApplicationDbContext>(opt => opt.UseInMemoryDatabase(dbName));
-
-                services.AddIdentity<ApplicationUser, IdentityRole>(options =>
+                webHost.UseTestServer();
+                webHost.ConfigureAppConfiguration((context, cfg) => cfg.AddInMemoryCollection(inMemorySettings));
+                webHost.ConfigureServices((context, services) =>
                 {
-                    options.User.RequireUniqueEmail = true;
-                })
-                .AddEntityFrameworkStores<ApplicationDbContext>()
-                .AddDefaultTokenProviders();
+                    var config = context.Configuration;
+                    var secret = config["JwtSettings:SecretKey"]!;
+                    var issuer = config["JwtSettings:Issuer"]!;
+                    var audience = config["JwtSettings:Audience"]!;
 
-                services.AddAuthentication(options =>
-                {
-                    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-                    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-                })
-                .AddJwtBearer(options =>
-                {
-                    options.TokenValidationParameters = new TokenValidationParameters
+                    services.AddRouting();
+                    services.AddDataProtection();
+                    services.AddDbContext<ApplicationDbContext>(opt => opt.UseInMemoryDatabase(dbName));
+
+                    services.AddIdentity<ApplicationUser, IdentityRole>(options =>
                     {
-                        ValidateIssuer = true,
-                        ValidateAudience = true,
-                        ValidateLifetime = true,
-                        ValidateIssuerSigningKey = true,
-                        ValidIssuer = issuer,
-                        ValidAudience = audience,
-                        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret)),
-                        ClockSkew = TimeSpan.Zero
-                    };
-                });
+                        options.User.RequireUniqueEmail = true;
+                    })
+                    .AddEntityFrameworkStores<ApplicationDbContext>()
+                    .AddDefaultTokenProviders();
 
-                services.AddAuthorization();
-                services.AddMemoryCache();
-                services.AddScoped<ITokenService, TokenService>();
-                services.AddScoped<ICityResolver, CityResolver>();
-                services.AddScoped<IUsernameGenerator, UsernameGenerator>();
-                services.AddScoped<IAuthService, AuthServiceImpl>();
-                services.AddSingleton<IEmailSender, DefaultCapturingEmailSender>();
-                services.AddScoped<IUserAccountService, UserAccountService>();
-                services.AddEndpointsApiExplorer();
-            })
-            .ConfigureTestServices(services =>
-            {
-                configureTestServices?.Invoke(services);
-            })
-            .Configure(app =>
-            {
-                app.UseRouting();
-                app.UseAuthentication();
-                app.UseAuthorization();
-                app.UseEndpoints(endpoints =>
+                    services.AddAuthentication(options =>
+                    {
+                        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+                        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+                    })
+                    .AddJwtBearer(options =>
+                    {
+                        options.TokenValidationParameters = new TokenValidationParameters
+                        {
+                            ValidateIssuer = true,
+                            ValidateAudience = true,
+                            ValidateLifetime = true,
+                            ValidateIssuerSigningKey = true,
+                            ValidIssuer = issuer,
+                            ValidAudience = audience,
+                            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secret)),
+                            ClockSkew = TimeSpan.Zero
+                        };
+                    });
+
+                    services.AddAuthorization();
+                    services.AddMemoryCache();
+                    services.AddScoped<ITokenService, TokenService>();
+                    services.AddScoped<ICityResolver, CityResolver>();
+                    services.AddScoped<IUsernameGenerator, UsernameGenerator>();
+                    services.AddScoped<IAuthService, AuthServiceImpl>();
+                    services.AddSingleton<IEmailSender, DefaultCapturingEmailSender>();
+                    services.AddScoped<IUserAccountService, UserAccountService>();
+                    services.AddEndpointsApiExplorer();
+                });
+                webHost.ConfigureTestServices(services =>
                 {
-                    endpoints.MapAuthEndpoints();
+                    configureTestServices?.Invoke(services);
+                });
+                webHost.Configure(app =>
+                {
+                    app.UseRouting();
+                    app.UseAuthentication();
+                    app.UseAuthorization();
+                    app.UseEndpoints(endpoints =>
+                    {
+                        endpoints.MapAuthEndpoints();
+                    });
                 });
             });
 
-        return new TestServer(builder);
+        return hostBuilder.Start();
     }
 
     public static IReadOnlyCollection<(string To, string Subject, string Body)> GetSentEmails()

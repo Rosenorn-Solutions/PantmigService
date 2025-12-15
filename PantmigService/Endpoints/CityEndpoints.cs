@@ -53,13 +53,9 @@ namespace PantmigService.Endpoints
 
                 return Results.Ok(results);
             })
-            .WithOpenApi(op =>
-            {
-                op.OperationId = "Cities_Search";
-                op.Summary = "Search cities for typeahead";
-                op.Description = "Search by city name or postal code. Open to all callers.";
-                return op;
-            })
+            .WithName("Cities_Search")
+            .WithSummary("Search cities for typeahead")
+            .WithDescription("Search by city name or postal code. Open to all callers.")
             .Produces<IEnumerable<CitySearchResult>>(StatusCodes.Status200OK, contentType: "application/json");
 
             return app;

@@ -1,5 +1,4 @@
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.OpenApi.Models;
 using PantmigService.Endpoints.Helpers;
 using PantmigService.Entities;
 using PantmigService.Security;
@@ -49,20 +48,11 @@ namespace PantmigService.Endpoints
                     return Results.Problem(title: "Failed to get active listings", detail: ex.Message, statusCode: StatusCodes.Status500InternalServerError, instance: ctx.TraceIdentifier);
                 }
             })
-            .WithOpenApi(op =>
-            {
-                op.OperationId = "Listings_GetActive";
-                op.Summary = "Get active recycle listings (paged)";
-                op.Description = "Returns active listings, paginated via page and pageSize query params. Defaults: page=1, pageSize=20 (max100).";
-                op.Parameters =
-     [
-     new OpenApiParameter { Name = "page", In = ParameterLocation.Query, Required = false, Description = "Page number (1-based)", Schema = new OpenApiSchema { Type = "integer", Default = new Microsoft.OpenApi.Any.OpenApiInteger(1) } },
- new OpenApiParameter { Name = "pageSize", In = ParameterLocation.Query, Required = false, Description = "Page size (max100)", Schema = new OpenApiSchema { Type = "integer", Default = new Microsoft.OpenApi.Any.OpenApiInteger(20) } }
-     ];
-                return op;
-            })
-            .RequireAuthorization()
-            .Produces<PagedResult<RecycleListingResponse>>(StatusCodes.Status200OK, contentType: "application/json");
+             .WithName("Listings_GetActive")
+             .WithSummary("Get active recycle listings (paged)")
+             .WithDescription("Returns active listings paginated via page and pageSize query params. Defaults: page=1, pageSize=20 (max 100).")
+             .RequireAuthorization()
+             .Produces<PagedResult<RecycleListingResponse>>(StatusCodes.Status200OK, contentType: "application/json");
 
             // Updated search endpoint: supports optional cityExternalId and/or coordinates
             group.MapPost("/search", async (PagedSearchRequest<object> req, ClaimsPrincipal user, IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx, ICityResolver cityResolver) =>
@@ -119,41 +109,14 @@ namespace PantmigService.Endpoints
                     return Results.Problem(title: "Failed to search listings", detail: ex.Message, statusCode: StatusCodes.Status500InternalServerError, instance: ctx.TraceIdentifier);
                 }
             })
-            .RequireAuthorization()
-            .Accepts<PagedSearchRequest<object>>("application/json")
-            .WithOpenApi(op =>
-            {
-                op.OperationId = "Listings_Search";
-                op.Summary = "Search listings";
-                op.Description = "Search for listings with pagination. Filters: cityExternalId (optional) and/or coordinates (latitude+longitude within5km). Results exclude listings that the current user has already applied for.";
-                op.RequestBody = new OpenApiRequestBody
-                {
-                    Required = true,
-                    Content =
-                {
-                     ["application/json"] = new OpenApiMediaType
-                     {
-                        Schema = new OpenApiSchema
-                     {
-                     Type = "object",
-                        Properties =
-                        {
-                             [nameof(PagedSearchRequest<object>.CityExternalId)] = new OpenApiSchema { Type = "string", Format = "uuid", Nullable = true, Description = "City external identifier (optional)" },
-                             [nameof(PagedSearchRequest<object>.OnlyActive)] = new OpenApiSchema { Type = "boolean", Description = "If true, returns only active listings in Created or PendingAcceptance states.", Default = new Microsoft.OpenApi.Any.OpenApiBoolean(true) },
-                             [nameof(PagedSearchRequest<object>.Page)] = new OpenApiSchema { Type = "integer", Format = "int32", Description = "Page number (1-based)", Default = new Microsoft.OpenApi.Any.OpenApiInteger(1) },
-                             [nameof(PagedSearchRequest<object>.PageSize)] = new OpenApiSchema { Type = "integer", Format = "int32", Description = "Page size (max100)", Default = new Microsoft.OpenApi.Any.OpenApiInteger(20) },
-                             [nameof(PagedSearchRequest<object>.Latitude)] = new OpenApiSchema { Type = "number", Format = "decimal", Nullable = true, Description = "Latitude for coordinate search (-90..90)" },
-                             [nameof(PagedSearchRequest<object>.Longitude)] = new OpenApiSchema { Type = "number", Format = "decimal", Nullable = true, Description = "Longitude for coordinate search (-180..180)" }
-                        }
-                     }
-                     }
-                }
-                };
-                return op;
-            })
-            .Produces<PagedResult<RecycleListingResponse>>(StatusCodes.Status200OK, contentType: "application/json")
-            .Produces(StatusCodes.Status400BadRequest)
-            .Produces(StatusCodes.Status401Unauthorized);
+             .RequireAuthorization()
+             .Accepts<PagedSearchRequest<object>>("application/json")
+             .WithName("Listings_Search")
+             .WithSummary("Search listings")
+             .WithDescription("Search for listings with pagination filtered by cityExternalId and/or coordinates. Results exclude listings the current user already applied for.")
+             .Produces<PagedResult<RecycleListingResponse>>(StatusCodes.Status200OK, contentType: "application/json")
+             .Produces(StatusCodes.Status400BadRequest)
+             .Produces(StatusCodes.Status401Unauthorized);
 
             group.MapGet("/{id:int}", async (int id, IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx) =>
             {
@@ -174,16 +137,12 @@ namespace PantmigService.Endpoints
                     return Results.Problem(title: "Failed to get listing", detail: ex.Message, statusCode: StatusCodes.Status500InternalServerError, instance: ctx.TraceIdentifier);
                 }
             })
-            .WithOpenApi(op =>
-            {
-                op.OperationId = "Listings_GetById";
-                op.Summary = "Get a listing by id";
-                op.Description = "Retrieves a single recycle listing by its identifier.";
-                return op;
-            })
-            .RequireAuthorization()
-            .Produces<RecycleListingResponse>(StatusCodes.Status200OK, contentType: "application/json")
-            .Produces(StatusCodes.Status404NotFound);
+            .WithName("Listings_GetById")
+            .WithSummary("Get a listing by id")
+            .WithDescription("Retrieves a single recycle listing by its identifier.")
+             .RequireAuthorization()
+             .Produces<RecycleListingResponse>(StatusCodes.Status200OK, contentType: "application/json")
+             .Produces(StatusCodes.Status404NotFound);
 
             group.MapGet("/my-applications", async (ClaimsPrincipal user, IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx) =>
             {
@@ -205,16 +164,12 @@ namespace PantmigService.Endpoints
                     return Results.Problem(title: "Failed to get applications", detail: ex.Message, statusCode: StatusCodes.Status500InternalServerError, instance: ctx.TraceIdentifier);
                 }
             })
-            .RequireAuthorization()
-            .WithOpenApi(op =>
-            {
-                op.OperationId = "Listings_MyApplications";
-                op.Summary = "Get my applications";
-                op.Description = "Returns all listings the authenticated recycler has applied to.";
-                return op;
-            })
-            .Produces<IEnumerable<RecycleListingResponse>>(StatusCodes.Status200OK, contentType: "application/json")
-            .Produces(StatusCodes.Status401Unauthorized);
+             .RequireAuthorization()
+             .WithName("Listings_MyApplications")
+             .WithSummary("Get my applications")
+             .WithDescription("Returns all listings the authenticated recycler has applied to.")
+             .Produces<IEnumerable<RecycleListingResponse>>(StatusCodes.Status200OK, contentType: "application/json")
+             .Produces(StatusCodes.Status401Unauthorized);
 
             group.MapGet("/my-listings", async (ClaimsPrincipal user, IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx) =>
             {
@@ -237,16 +192,12 @@ namespace PantmigService.Endpoints
                     return Results.Problem(title: "Failed to get listings", detail: ex.Message, statusCode: StatusCodes.Status500InternalServerError, instance: ctx.TraceIdentifier);
                 }
             })
-            .RequireAuthorization("VerifiedDonator")
-            .WithOpenApi(op =>
-            {
-                op.OperationId = "Listings_My";
-                op.Summary = "Get my listings";
-                op.Description = "Returns all listings created by the authenticated donator, including cancelled and completed.";
-                return op;
-            })
-            .Produces<IEnumerable<RecycleListingResponse>>(StatusCodes.Status200OK, contentType: "application/json")
-            .Produces(StatusCodes.Status401Unauthorized);
+             .RequireAuthorization("VerifiedDonator")
+             .WithName("Listings_My")
+             .WithSummary("Get my listings")
+             .WithDescription("Returns all listings created by the authenticated donator, including cancelled and completed.")
+             .Produces<IEnumerable<RecycleListingResponse>>(StatusCodes.Status200OK, contentType: "application/json")
+             .Produces(StatusCodes.Status401Unauthorized);
 
             group.MapPost("/", async (HttpRequest httpRequest, ClaimsPrincipal user, IRecycleListingService svc, IRecycleListingValidationService validator, ICreateListingRequestParser parser, ICityResolver cityResolver, ILoggerFactory lf, HttpContext ctx) =>
             {
@@ -331,69 +282,15 @@ namespace PantmigService.Endpoints
                     return Results.Problem(title: "Failed to create listing", detail: ex.Message, statusCode: StatusCodes.Status500InternalServerError, instance: ctx.TraceIdentifier);
                 }
             })
-            .RequireAuthorization("VerifiedDonator")
-            .Accepts<CreateRecycleListingRequest>("application/json", "multipart/form-data")
-            .WithOpenApi(op =>
-            {
-                op.OperationId = "Listings_Create";
-                op.Summary = "Create a new listing";
-                op.Description = "Creates a new recycle listing with structured item contents. Supports either JSON body (application/json) or multipart/form-data (fields: title, description, city, availableFrom, availableTo, optional latitude/longitude, items as JSON string, images as image/*). Requires a verified Donator.";
-
-                op.RequestBody = new OpenApiRequestBody
-                {
-                    Required = true,
-                    Content =
-                    {
-                         ["application/json"] = new OpenApiMediaType
-                         {
-                            Schema = new OpenApiSchema
-                         {
-                            Reference = new OpenApiReference
-                            {
-                                Type = ReferenceType.Schema,
-                                Id = nameof(CreateRecycleListingRequest)
-                            }
-                         }
-                         },
-                             ["multipart/form-data"] = new OpenApiMediaType
-                                {
-                                    Schema = new OpenApiSchema
-                                {
-                             Type = "object",
-                             Required = { "title", "description", "city", "availableFrom", "availableTo" },
-                                 Properties =
-                                 {
-                                 ["title"] = new OpenApiSchema { Type = "string" },
-                                 ["description"] = new OpenApiSchema { Type = "string" },
-                                 ["cityExternalId"] = new OpenApiSchema { Type = "string", Format = "uuid", Nullable = true },
-                                 ["city"] = new OpenApiSchema { Type = "string" },
-                                 ["location"] = new OpenApiSchema { Type = "string"},
-                                 ["availableFrom"] = new OpenApiSchema { Type = "string", Format = "date" },
-                                 ["availableTo"] = new OpenApiSchema { Type = "string", Format = "date" },
-                                 ["latitude"] = new OpenApiSchema { Type = "number", Format = "decimal", Nullable = true, Description = "Initial meeting point latitude (-90..90)" },
-                                 ["longitude"] = new OpenApiSchema { Type = "number", Format = "decimal", Nullable = true, Description = "Initial meeting point longitude (-180..180)" },
-                                 ["items"] = new OpenApiSchema
-                                 {
-                                 Description = "JSON array of items example: [{\"type\":1,\"quantity\":10}]",
-                                 Type = "string"
-                                 },
-                             ["images"] = new OpenApiSchema
-                             {
-                             Type = "array",
-                             Items = new OpenApiSchema { Type = "string", Format = "binary" },
-                             Description = "Zero or more images (PNG/JPEG). Max6 images, each <=5 MB."
-                             }
-                             }
-                             }
-                         }
-                    }
-                };
-                return op;
-            })
-            .WithMetadata(new RequestSizeLimitAttribute(64L * 1024 * 1024))
-            .Produces<RecycleListingResponse>(StatusCodes.Status201Created, contentType: "application/json")
-            .Produces(StatusCodes.Status400BadRequest)
-            .Produces(StatusCodes.Status401Unauthorized);
+             .RequireAuthorization("VerifiedDonator")
+             .Accepts<CreateRecycleListingRequest>("application/json", "multipart/form-data")
+             .WithName("Listings_Create")
+             .WithSummary("Create a new listing")
+             .WithDescription("Creates a new recycle listing with structured item contents via JSON or multipart form. Requires a verified Donator.")
+             .WithMetadata(new RequestSizeLimitAttribute(64L * 1024 * 1024))
+             .Produces<RecycleListingResponse>(StatusCodes.Status201Created, contentType: "application/json")
+             .Produces(StatusCodes.Status400BadRequest)
+             .Produces(StatusCodes.Status401Unauthorized);
 
             group.MapPost("/pickup/request", async (PickupRequest req, ClaimsPrincipal user, IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx) =>
             {
@@ -417,18 +314,14 @@ namespace PantmigService.Endpoints
                     return Results.Problem(title: "Pickup request error", detail: ex.Message, statusCode: StatusCodes.Status500InternalServerError, instance: ctx.TraceIdentifier);
                 }
             })
-            .RequireAuthorization()
-            .Accepts<PickupRequest>("application/json")
-            .WithOpenApi(op =>
-            {
-                op.OperationId = "Listings_PickupRequest";
-                op.Summary = "Request pickup for a listing";
-                op.Description = "Recycler requests to pick up a specific listing. Adds the recycler to the applicants list.";
-                return op;
-            })
-            .Produces(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status400BadRequest)
-            .Produces(StatusCodes.Status401Unauthorized);
+             .RequireAuthorization()
+             .Accepts<PickupRequest>("application/json")
+             .WithName("Listings_PickupRequest")
+             .WithSummary("Request pickup for a listing")
+             .WithDescription("Recycler requests to pick up a specific listing, adding them to the applicants list.")
+             .Produces(StatusCodes.Status200OK)
+             .Produces(StatusCodes.Status400BadRequest)
+             .Produces(StatusCodes.Status401Unauthorized);
 
             group.MapGet("/{id:int}/applicants", async (int id, ClaimsPrincipal user, IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx) =>
             {
@@ -452,18 +345,14 @@ namespace PantmigService.Endpoints
                     return Results.Problem(title: "Failed to get applicants", detail: ex.Message, statusCode: StatusCodes.Status500InternalServerError, instance: ctx.TraceIdentifier);
                 }
             })
-            .RequireAuthorization("VerifiedDonator")
-            .WithOpenApi(op =>
-            {
-                op.OperationId = "Listings_Applicants_Get";
-                op.Summary = "Get applicants for a listing";
-                op.Description = "Donator retrieves the list of applicants with their user IDs and appliedAt timestamps.";
-                return op;
-            })
-            .Produces<IEnumerable<ApplicantInfo>>(StatusCodes.Status200OK, contentType: "application/json")
-            .Produces(StatusCodes.Status401Unauthorized)
-            .Produces(StatusCodes.Status403Forbidden)
-            .Produces(StatusCodes.Status400BadRequest);
+             .RequireAuthorization("VerifiedDonator")
+             .WithName("Listings_Applicants_Get")
+             .WithSummary("Get applicants for a listing")
+             .WithDescription("Donator retrieves the list of applicants with their user IDs and appliedAt timestamps.")
+             .Produces<IEnumerable<ApplicantInfo>>(StatusCodes.Status200OK, contentType: "application/json")
+             .Produces(StatusCodes.Status401Unauthorized)
+             .Produces(StatusCodes.Status403Forbidden)
+             .Produces(StatusCodes.Status400BadRequest);
 
             group.MapPost("/pickup/accept", async (AcceptRequest req, ClaimsPrincipal user, IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx) =>
             {
@@ -487,18 +376,14 @@ namespace PantmigService.Endpoints
                     return Results.Problem(title: "Accept error", detail: ex.Message, statusCode: StatusCodes.Status500InternalServerError, instance: ctx.TraceIdentifier);
                 }
             })
-            .RequireAuthorization("VerifiedDonator")
-            .Accepts<AcceptRequest>("application/json")
-            .WithOpenApi(op =>
-            {
-                op.OperationId = "Listings_PickupAccept";
-                op.Summary = "Accept a recycler for pickup";
-                op.Description = "Donator selects one of the applicants and accepts them for pickup.";
-                return op;
-            })
-            .Produces(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status400BadRequest)
-            .Produces(StatusCodes.Status401Unauthorized);
+             .RequireAuthorization("VerifiedDonator")
+             .Accepts<AcceptRequest>("application/json")
+             .WithName("Listings_PickupAccept")
+             .WithSummary("Accept a recycler for pickup")
+             .WithDescription("Donator selects one of the applicants and accepts them for pickup.")
+             .Produces(StatusCodes.Status200OK)
+             .Produces(StatusCodes.Status400BadRequest)
+             .Produces(StatusCodes.Status401Unauthorized);
 
             group.MapPost("/chat/start", async (ChatStartRequest req, ClaimsPrincipal user, IRecycleListingService svc, IChatValidationService chatValidator, ILoggerFactory lf, HttpContext ctx) =>
             {
@@ -539,20 +424,16 @@ namespace PantmigService.Endpoints
                     return Results.Problem(title: "Chat start error", detail: ex.Message, statusCode: StatusCodes.Status500InternalServerError, instance: ctx.TraceIdentifier);
                 }
             })
-            .RequireAuthorization()
-            .Accepts<ChatStartRequest>("application/json")
-            .WithOpenApi(op =>
-            {
-                op.OperationId = "Listings_ChatStart";
-                op.Summary = "Start a direct chat for a listing";
-                op.Description = "Starts a chat between the donator and the assigned recycler for the listing.";
-                return op;
-            })
-            .Produces(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status400BadRequest)
-            .Produces(StatusCodes.Status401Unauthorized)
-            .Produces(StatusCodes.Status403Forbidden)
-            .Produces(StatusCodes.Status404NotFound);
+             .RequireAuthorization()
+             .Accepts<ChatStartRequest>("application/json")
+             .WithName("Listings_ChatStart")
+             .WithSummary("Start a direct chat for a listing")
+             .WithDescription("Starts a chat between the donator and the assigned recycler for the listing.")
+             .Produces(StatusCodes.Status200OK)
+             .Produces(StatusCodes.Status400BadRequest)
+             .Produces(StatusCodes.Status401Unauthorized)
+             .Produces(StatusCodes.Status403Forbidden)
+             .Produces(StatusCodes.Status404NotFound);
 
             group.MapPost("/meeting/set", async (MeetingPointRequest req, ClaimsPrincipal user, IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx) =>
             {
@@ -576,18 +457,14 @@ namespace PantmigService.Endpoints
                     return Results.Problem(title: "Set meeting point error", detail: ex.Message, statusCode: StatusCodes.Status500InternalServerError, instance: ctx.TraceIdentifier);
                 }
             })
-            .RequireAuthorization("VerifiedDonator")
-            .Accepts<MeetingPointRequest>("application/json")
-            .WithOpenApi(op =>
-            {
-                op.OperationId = "Listings_MeetingSet";
-                op.Summary = "Set meeting point for a listing";
-                op.Description = "Donator sets the meeting point coordinates. Requires chat to be started.";
-                return op;
-            })
-            .Produces(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status400BadRequest)
-            .Produces(StatusCodes.Status401Unauthorized);
+             .RequireAuthorization("VerifiedDonator")
+             .Accepts<MeetingPointRequest>("application/json")
+             .WithName("Listings_MeetingSet")
+             .WithSummary("Set meeting point for a listing")
+             .WithDescription("Donator sets the meeting point coordinates. Requires chat to be started.")
+             .Produces(StatusCodes.Status200OK)
+             .Produces(StatusCodes.Status400BadRequest)
+             .Produces(StatusCodes.Status401Unauthorized);
 
             group.MapPost("/pickup/confirm", async (PickupConfirmRequest req, ClaimsPrincipal user, IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx) =>
             {
@@ -611,18 +488,14 @@ namespace PantmigService.Endpoints
                     return Results.Problem(title: "Pickup confirm error", detail: ex.Message, statusCode: StatusCodes.Status500InternalServerError, instance: ctx.TraceIdentifier);
                 }
             })
-            .RequireAuthorization("VerifiedDonator")
-            .Accepts<PickupConfirmRequest>("application/json")
-            .WithOpenApi(op =>
-            {
-                op.OperationId = "Listings_PickupConfirm";
-                op.Summary = "Confirm pickup and complete listing";
-                op.Description = "Donator confirms that the pickup has been performed (after chat and meeting point). This completes the listing.";
-                return op;
-            })
-            .Produces(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status400BadRequest)
-            .Produces(StatusCodes.Status401Unauthorized);
+             .RequireAuthorization("VerifiedDonator")
+             .Accepts<PickupConfirmRequest>("application/json")
+             .WithName("Listings_PickupConfirm")
+             .WithSummary("Confirm pickup and complete listing")
+             .WithDescription("Donator confirms pickup after chat and meeting point are set to complete the listing.")
+             .Produces(StatusCodes.Status200OK)
+             .Produces(StatusCodes.Status400BadRequest)
+             .Produces(StatusCodes.Status401Unauthorized);
 
             group.MapPost("/receipt/upload", async ([FromForm] int listingId, [FromForm] decimal reportedAmount, [FromForm] IFormFile file, ClaimsPrincipal user, IRecycleListingService svc, IFileValidationService fileValidator, IAntivirusScanner av, ILoggerFactory lf, HttpContext ctx) =>
             {
@@ -671,19 +544,15 @@ namespace PantmigService.Endpoints
                     return Results.Problem(title: "Receipt upload error", detail: ex.Message, statusCode: StatusCodes.Status500InternalServerError, instance: ctx.TraceIdentifier);
                 }
             })
-            .RequireAuthorization()
-            .DisableAntiforgery()
-            .WithOpenApi(op =>
-            {
-                op.OperationId = "Listings_ReceiptUpload";
-                op.Summary = "Upload receipt image";
-                op.Description = "Recycler uploads the receipt image as multipart/form-data with fields: listingId, reportedAmount, file. This does not affect listing status and is available even after completion.";
-                return op;
-            })
-            .WithMetadata(new RequestSizeLimitAttribute(64L * 1024 * 1024))
-            .Produces(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status400BadRequest)
-            .Produces(StatusCodes.Status401Unauthorized);
+             .RequireAuthorization()
+             .DisableAntiforgery()
+             .WithName("Listings_ReceiptUpload")
+             .WithSummary("Upload receipt image")
+             .WithDescription("Recycler uploads the receipt image as multipart/form-data. Available even after completion and does not change listing status.")
+             .WithMetadata(new RequestSizeLimitAttribute(64L * 1024 * 1024))
+             .Produces(StatusCodes.Status200OK)
+             .Produces(StatusCodes.Status400BadRequest)
+             .Produces(StatusCodes.Status401Unauthorized);
 
             group.MapPost("/cancel", async (CancelRequest req, ClaimsPrincipal user, IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx) =>
             {
@@ -707,18 +576,14 @@ namespace PantmigService.Endpoints
                     return Results.Problem(title: "Cancel error", detail: ex.Message, statusCode: StatusCodes.Status500InternalServerError, instance: ctx.TraceIdentifier);
                 }
             })
-            .RequireAuthorization("VerifiedDonator")
-            .Accepts<CancelRequest>("application/json")
-            .WithOpenApi(op =>
-            {
-                op.OperationId = "Listings_Cancel";
-                op.Summary = "Cancel a listing";
-                op.Description = "Donator cancels their own listing if not already completed or cancelled.";
-                return op;
-            })
-            .Produces(StatusCodes.Status200OK)
-            .Produces(StatusCodes.Status400BadRequest)
-            .Produces(StatusCodes.Status401Unauthorized);
+             .RequireAuthorization("VerifiedDonator")
+             .Accepts<CancelRequest>("application/json")
+             .WithName("Listings_Cancel")
+             .WithSummary("Cancel a listing")
+             .WithDescription("Donator cancels their own listing if not already completed or cancelled.")
+             .Produces(StatusCodes.Status200OK)
+             .Produces(StatusCodes.Status400BadRequest)
+             .Produces(StatusCodes.Status401Unauthorized);
 
             group.MapGet("/{id:int}/receipt", async (int id, ClaimsPrincipal user, IRecycleListingService svc, ILoggerFactory lf, HttpContext ctx) =>
             {
@@ -754,18 +619,14 @@ namespace PantmigService.Endpoints
                     return Results.Problem(title: "Failed to get receipt", detail: ex.Message, statusCode: StatusCodes.Status500InternalServerError, instance: ctx.TraceIdentifier);
                 }
             })
-            .RequireAuthorization()
-            .WithOpenApi(op =>
-            {
-                op.OperationId = "Listings_GetReceipt";
-                op.Summary = "Download receipt image for a listing";
-                op.Description = "Returns the raw receipt image bytes with correct content-type. Only the listing owner or assigned recycler may download.";
-                return op;
-            })
-            .Produces(StatusCodes.Status200OK, contentType: "application/octet-stream")
-            .Produces(StatusCodes.Status401Unauthorized)
-            .Produces(StatusCodes.Status403Forbidden)
-            .Produces(StatusCodes.Status404NotFound);
+             .RequireAuthorization()
+             .WithName("Listings_GetReceipt")
+             .WithSummary("Download receipt image for a listing")
+             .WithDescription("Returns the receipt image bytes with correct content-type. Only the listing owner or assigned recycler may download.")
+             .Produces(StatusCodes.Status200OK, contentType: "application/octet-stream")
+             .Produces(StatusCodes.Status401Unauthorized)
+             .Produces(StatusCodes.Status403Forbidden)
+             .Produces(StatusCodes.Status404NotFound);
 
             return app;
         }

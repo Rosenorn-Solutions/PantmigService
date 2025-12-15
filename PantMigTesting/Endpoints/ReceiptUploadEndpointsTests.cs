@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using PantmigService.Data;
 using PantmigService.Endpoints;
@@ -23,8 +24,8 @@ public class ReceiptUploadEndpointsTests
     [Fact]
     public async Task Receipt_Upload_Works_EndToEnd()
     {
-        using var server = TestHostBuilder.CreateServer();
-        using var client = server.CreateClient();
+        using var host = TestHostBuilder.CreateHost();
+        using var client = host.GetTestClient();
 
         // 1. Donator creates listing
         client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
@@ -125,8 +126,8 @@ public class ReceiptUploadEndpointsTests
         var host = config["ClamAV:Host"] ?? Environment.GetEnvironmentVariable("CLAMAV_HOST") ?? "127.0.0.1";
         var port = config.GetValue("ClamAV:Port", 3310);
 
-        using var server = CreateServerWithClamAV(host, port);
-        using var client = server.CreateClient();
+        using var clamHost = CreateHostWithClamAV(host, port);
+        using var client = clamHost.GetTestClient();
 
         // 1. Donator creates listing
         client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
@@ -172,65 +173,68 @@ public class ReceiptUploadEndpointsTests
         Assert.Equal(System.Net.HttpStatusCode.BadRequest, uploadResp.StatusCode);
     }
 
-    private static TestServer CreateServerWithClamAV(string host, int port)
+    private static IHost CreateHostWithClamAV(string host, int port)
     {
         var dbName = Guid.NewGuid().ToString();
-        var builder = new WebHostBuilder()
-            .ConfigureServices(services =>
+        var hostBuilder = new HostBuilder()
+            .ConfigureWebHost(webHost =>
             {
-                services.AddRouting();
-
-                services.AddAuthentication(o =>
+                webHost.UseTestServer();
+                webHost.ConfigureServices(services =>
                 {
-                    o.DefaultAuthenticateScheme = TestAuthHandler.SchemeName;
-                    o.DefaultChallengeScheme = TestAuthHandler.SchemeName;
-                }).AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(TestAuthHandler.SchemeName, _ => { });
+                    services.AddRouting();
 
-                services.AddAuthorization(options =>
-                {
-                    options.AddPolicy("VerifiedDonator", policy =>
+                    services.AddAuthentication(o =>
                     {
-                        policy.RequireAuthenticatedUser();
-                        policy.RequireAssertion(ctx =>
+                        o.DefaultAuthenticateScheme = TestAuthHandler.SchemeName;
+                        o.DefaultChallengeScheme = TestAuthHandler.SchemeName;
+                    }).AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(TestAuthHandler.SchemeName, _ => { });
+
+                    services.AddAuthorization(options =>
+                    {
+                        options.AddPolicy("VerifiedDonator", policy =>
                         {
-                            var type = ctx.User.FindFirst("userType")?.Value;
-                            var verified = ctx.User.FindFirst("isMitIdVerified")?.Value;
-                            return string.Equals(type, "Donator", StringComparison.OrdinalIgnoreCase)
-                                   && string.Equals(verified, bool.TrueString, StringComparison.OrdinalIgnoreCase);
+                            policy.RequireAuthenticatedUser();
+                            policy.RequireAssertion(ctx =>
+                            {
+                                var type = ctx.User.FindFirst("userType")?.Value;
+                                var verified = ctx.User.FindFirst("isMitIdVerified")?.Value;
+                                return string.Equals(type, "Donator", StringComparison.OrdinalIgnoreCase)
+                                       && string.Equals(verified, bool.TrueString, StringComparison.OrdinalIgnoreCase);
+                            });
                         });
                     });
+
+                    services.AddDbContext<PantmigDbContext>(opt =>
+                        opt.UseInMemoryDatabase(dbName));
+                    services.AddScoped<IRecycleListingService, RecycleListingService>();
+                    services.AddScoped<ICityResolver, CityResolver>();
+                    services.AddScoped<IRecycleListingValidationService, RecycleListingValidationService>();
+                    services.AddScoped<IFileValidationService, FileValidationService>();
+                    services.AddScoped<IChatValidationService, ChatValidationService>();
+                    services.AddScoped<ICreateListingRequestParser, CreateListingRequestParser>();
+
+                    services.AddMemoryCache();
+
+                    services.AddSingleton<IAntivirusScanner>(_ => new ClamAvAntivirusScanner(new ClamAvOptions
+                    {
+                        Host = host,
+                        Port = port,
+                        Enabled = true
+                    }));
                 });
-
-                services.AddDbContext<PantmigDbContext>(opt =>
-                    opt.UseInMemoryDatabase(dbName));
-                services.AddScoped<IRecycleListingService, RecycleListingService>();
-                services.AddScoped<ICityResolver, CityResolver>();
-                services.AddScoped<IRecycleListingValidationService, RecycleListingValidationService>();
-                services.AddScoped<IFileValidationService, FileValidationService>();
-                services.AddScoped<IChatValidationService, ChatValidationService>();
-                services.AddScoped<ICreateListingRequestParser, CreateListingRequestParser>();
-
-                services.AddMemoryCache();
-
-                // Use real ClamAV for this server
-                services.AddSingleton<IAntivirusScanner>(_ => new ClamAvAntivirusScanner(new ClamAvOptions
+                webHost.Configure(app =>
                 {
-                    Host = host,
-                    Port = port,
-                    Enabled = true
-                }));
-            })
-            .Configure(app =>
-            {
-                app.UseRouting();
-                app.UseAuthentication();
-                app.UseAuthorization();
-                app.UseEndpoints(endpoints =>
-                {
-                    endpoints.MapRecycleListingEndpoints();
+                    app.UseRouting();
+                    app.UseAuthentication();
+                    app.UseAuthorization();
+                    app.UseEndpoints(endpoints =>
+                    {
+                        endpoints.MapRecycleListingEndpoints();
+                    });
                 });
             });
 
-        return new TestServer(builder);
+        return hostBuilder.Start();
     }
 }
