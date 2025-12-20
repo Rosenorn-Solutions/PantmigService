@@ -67,13 +67,9 @@ namespace PantmigService.Endpoints
             .Accepts<SubscribeRequest>("application/json")
             .Produces<SubscribeResponse>(StatusCodes.Status200OK, contentType: "application/json")
             .Produces<SubscribeResponse>(StatusCodes.Status400BadRequest, contentType: "application/json")
-            .WithOpenApi(op =>
-            {
-                op.OperationId = "Newsletter_Subscribe";
-                op.Summary = "Subscribe to the newsletter";
-                op.Description = "Stores the subscriber in the database and sends a confirmation email.";
-                return op;
-            });
+            .WithName("Newsletter_Subscribe")
+            .WithSummary("Subscribe to the newsletter")
+            .WithDescription("Stores the subscriber in the database and sends a confirmation email.");
 
             return app;
         }
@@ -107,13 +103,9 @@ namespace PantmigService.Endpoints
             .Accepts<UnsubscribeRequest>("application/json")
             .Produces<UnsubscribeResponse>(StatusCodes.Status200OK, contentType: "application/json")
             .Produces<UnsubscribeResponse>(StatusCodes.Status400BadRequest, contentType: "application/json")
-            .WithOpenApi(op =>
-            {
-                op.OperationId = "Newsletter_Unsubscribe";
-                op.Summary = "Unsubscribe from the newsletter";
-                op.Description = "Removes the email from the newsletter subscriber list. Idempotent.";
-                return op;
-            });
+            .WithName("Newsletter_Unsubscribe")
+            .WithSummary("Unsubscribe from the newsletter")
+            .WithDescription("Removes the email from the newsletter subscriber list. Idempotent.");
 
             group.MapGet("/unsubscribe", async ([FromQuery] string email, PantmigDbContext db, HttpContext ctx) =>
             {
@@ -135,13 +127,9 @@ namespace PantmigService.Endpoints
             })
             .Produces(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status400BadRequest)
-            .WithOpenApi(op =>
-            {
-                op.OperationId = "Newsletter_Unsubscribe_Get";
-                op.Summary = "One-click unsubscribe";
-                op.Description = "Removes the email using a simple GET. Intended for List-Unsubscribe one-click.";
-                return op;
-            });
+            .WithName("Newsletter_Unsubscribe_Get")
+            .WithSummary("One-click unsubscribe")
+            .WithDescription("Removes the email using a simple GET. Intended for List-Unsubscribe one-click.");
 
             return app;
         }

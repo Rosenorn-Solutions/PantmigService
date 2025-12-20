@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using System.Net;
 using System.Net.Http.Json;
 
@@ -30,68 +31,72 @@ public class AvailabilityEndpointsTests
             => Task.FromResult<(AuthResponse?, string?)>((null, "not-implemented"));
     }
 
-    private static TestServer CreateServer(string? dbName = null)
+    private static IHost CreateHost(string? dbName = null)
     {
         var databaseName = dbName ?? Guid.NewGuid().ToString();
 
-        var builder = new WebHostBuilder()
-            .ConfigureServices(services =>
+        var dict = new Dictionary<string, string?>
+        {
+            ["UsernameGenerators:0"] = "TestPrefix",
+            ["JwtSettings:SecretKey"] = "test_secret_key_12345678901234567890",
+            ["JwtSettings:Issuer"] = "test",
+            ["JwtSettings:Audience"] = "test",
+            ["Cache:UserRatingSeconds"] = "60"
+        };
+
+        var hostBuilder = new HostBuilder()
+            .ConfigureWebHost(webHost =>
             {
-                services.AddRouting();
-
-                // Minimal configuration used by UsernameGenerator and Auth endpoints
-                var dict = new Dictionary<string, string?>
+                webHost.UseTestServer();
+                webHost.ConfigureServices(services =>
                 {
-                    ["UsernameGenerators:0"] = "TestPrefix",
-                    ["JwtSettings:SecretKey"] = "test_secret_key_12345678901234567890",
-                    ["JwtSettings:Issuer"] = "test",
-                    ["JwtSettings:Audience"] = "test",
-                    ["Cache:UserRatingSeconds"] = "60"
-                };
-                IConfiguration config = new ConfigurationBuilder()
-                    .AddInMemoryCollection(dict)
-                    .Build();
-                services.AddSingleton(config);
+                    services.AddRouting();
 
-                services.AddDbContext<ApplicationDbContext>(o => o.UseInMemoryDatabase(databaseName));
+                    IConfiguration config = new ConfigurationBuilder()
+                        .AddInMemoryCollection(dict)
+                        .Build();
+                    services.AddSingleton(config);
 
-                services.AddIdentity<ApplicationUser, IdentityRole>(options =>
+                    services.AddDbContext<ApplicationDbContext>(o => o.UseInMemoryDatabase(databaseName));
+
+                    services.AddIdentity<ApplicationUser, IdentityRole>(options =>
+                    {
+                        options.User.RequireUniqueEmail = true;
+                    })
+                    .AddEntityFrameworkStores<ApplicationDbContext>()
+                    .AddDefaultTokenProviders();
+
+                    // Register services used by mapped auth endpoints
+                    services.AddScoped<ICityResolver, CityResolver>();
+                    services.AddScoped<IUsernameGenerator, UsernameGenerator>();
+                    services.AddScoped<IAuthService, AuthServiceImpl>();
+                    services.AddScoped<ITokenService, FakeTokenService>();
+                    services.AddScoped<IEmailSender, SmtpEmailSender>();
+                    services.AddScoped<IUserAccountService, UserAccountService>();
+
+                    services.AddMemoryCache();
+                });
+                webHost.Configure(app =>
                 {
-                    options.User.RequireUniqueEmail = true;
-                })
-                .AddEntityFrameworkStores<ApplicationDbContext>()
-                .AddDefaultTokenProviders();
-
-                // Register services used by mapped auth endpoints
-                services.AddScoped<ICityResolver, CityResolver>();
-                services.AddScoped<IUsernameGenerator, UsernameGenerator>();
-                services.AddScoped<IAuthService, AuthServiceImpl>();
-                services.AddScoped<ITokenService, FakeTokenService>();
-                services.AddScoped<IEmailSender, SmtpEmailSender>();
-                services.AddScoped<IUserAccountService, UserAccountService>();
-
-                services.AddMemoryCache();
-            })
-            .Configure(app =>
-            {
-                app.UseRouting();
-                app.UseEndpoints(endpoints =>
-                {
-                    endpoints.MapAuthEndpoints();
+                    app.UseRouting();
+                    app.UseEndpoints(endpoints =>
+                    {
+                        endpoints.MapAuthEndpoints();
+                    });
                 });
             });
 
-        return new TestServer(builder);
+        return hostBuilder.Start();
     }
 
     [Fact]
     public async Task CheckEmail_Returns_Taken_Status()
     {
-        using var server = CreateServer();
-        using var client = server.CreateClient();
+        using var host = CreateHost();
+        using var client = host.GetTestClient();
 
         // Seed a user
-        using (var scope = server.Services.CreateScope())
+        using (var scope = host.Services.CreateScope())
         {
             var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
             var user = new ApplicationUser
@@ -126,11 +131,11 @@ public class AvailabilityEndpointsTests
     [Fact]
     public async Task CheckPhone_Returns_Taken_Status()
     {
-        using var server = CreateServer();
-        using var client = server.CreateClient();
+        using var host = CreateHost();
+        using var client = host.GetTestClient();
 
         // Seed a user
-        using (var scope = server.Services.CreateScope())
+        using (var scope = host.Services.CreateScope())
         {
             var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
             var user = new ApplicationUser

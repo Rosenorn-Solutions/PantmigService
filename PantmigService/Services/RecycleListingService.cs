@@ -16,9 +16,9 @@ namespace PantmigService.Services
         private static readonly TimeSpan ListingsCacheTtl = TimeSpan.FromSeconds(30);
         private static readonly TimeSpan ListingCacheTtl = TimeSpan.FromMinutes(5);
 
-        private const int MaxPageSize =100;
-        private const double EarthRadiusKm =6371.0088; // mean Earth radius
-        private const double SearchRadiusKm =5.0;
+        private const int MaxPageSize = 100;
+        private const double EarthRadiusKm = 6371.0088; // mean Earth radius
+        private const double SearchRadiusKm = 5.0;
 
         private string ActiveListingsCacheKey(int cityId) => $"listings:active:city:{cityId}";
         private string ActiveAllCacheKey(int page, int pageSize) => $"listings:active:all:p{page}:s{pageSize}";
@@ -90,8 +90,8 @@ namespace PantmigService.Services
 
         public async Task<PagedResult<RecycleListing>> GetActivePagedAsync(int page, int pageSize, CancellationToken ct = default)
         {
-            if (page <=0) page =1;
-            if (pageSize <=0) pageSize =20;
+            if (page <= 0) page = 1;
+            if (pageSize <= 0) pageSize = 20;
             if (pageSize > MaxPageSize) pageSize = MaxPageSize;
 
             var key = ActiveAllCacheKey(page, pageSize);
@@ -110,7 +110,7 @@ namespace PantmigService.Services
                 .Include(l => l.City)
                 .Include(l => l.Items)
                 .Include(l => l.Images)
-                .Skip((page -1) * pageSize)
+                .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync(ct);
 
@@ -305,9 +305,9 @@ namespace PantmigService.Services
         public async Task<bool> SetMeetingPointAsync(int id, string donatorUserId, decimal latitude, decimal longitude, CancellationToken ct = default)
         {
             _logger.LogDebug("Setting meeting point for listing {ListingId} by donator {Donator} to ({Lat},{Lon})", id, donatorUserId, latitude, longitude);
-            if (latitude is < -90 or >90 || longitude is < -180 or >180)
+            if (latitude is < -90 or > 90 || longitude is < -180 or > 180)
             {
-                _logger.LogWarning("SetMeetingPoint failed: invalid coordinates for listing {ListingId}");
+                _logger.LogWarning("SetMeetingPoint failed: invalid coordinates for listing {ListingId}", id);
                 return false;
             }
             var listing = await _db.RecycleListings.FirstOrDefaultAsync(x => x.Id == id, ct);
@@ -334,8 +334,8 @@ namespace PantmigService.Services
                 _logger.LogWarning("SetMeetingPoint failed: invalid status {Status} for listing {ListingId}", listing.Status, id);
                 return false;
             }
-            listing.MeetingLatitude = decimal.Round(latitude,6);
-            listing.MeetingLongitude = decimal.Round(longitude,6);
+            listing.MeetingLatitude = decimal.Round(latitude, 6);
+            listing.MeetingLongitude = decimal.Round(longitude, 6);
             listing.MeetingSetAt = DateTime.UtcNow;
             await _db.SaveChangesAsync(ct);
 
@@ -500,8 +500,8 @@ namespace PantmigService.Services
         // New: paginated search with city and/or coordinates, exclude listings user already applied for
         public async Task<PagedResult<RecycleListing>> SearchAsync(int? cityId, string userId, int page, int pageSize, bool onlyActive = true, decimal? latitude = null, decimal? longitude = null, CancellationToken ct = default)
         {
-            if (page <=0) page =1;
-            if (pageSize <=0) pageSize =20;
+            if (page <= 0) page = 1;
+            if (pageSize <= 0) pageSize = 20;
             if (pageSize > MaxPageSize) pageSize = MaxPageSize;
 
             var key = SearchPageCacheKey(cityId, userId, page, pageSize, onlyActive, latitude, longitude);
@@ -522,7 +522,7 @@ namespace PantmigService.Services
 
             // Build city subset
             IQueryable<RecycleListing>? cityQuery = null;
-            if (cityId.HasValue && cityId.Value >0)
+            if (cityId.HasValue && cityId.Value > 0)
                 cityQuery = baseQuery.Where(l => l.CityId == cityId.Value);
 
             // Build coordinate subset (5km radius) using bounding box
@@ -532,7 +532,7 @@ namespace PantmigService.Services
                 var lat = (double)latitude.Value;
                 var lon = (double)longitude.Value;
                 var latDelta = (SearchRadiusKm / EarthRadiusKm) * (180.0 / Math.PI);
-                var lonDelta = (SearchRadiusKm / (EarthRadiusKm * Math.Cos(lat * Math.PI /180.0))) * (180.0 / Math.PI);
+                var lonDelta = (SearchRadiusKm / (EarthRadiusKm * Math.Cos(lat * Math.PI / 180.0))) * (180.0 / Math.PI);
                 var minLat = lat - latDelta;
                 var maxLat = lat + latDelta;
                 var minLon = lon - lonDelta;
@@ -560,7 +560,7 @@ namespace PantmigService.Services
             else
             {
                 // Should not happen due to endpoint validation, but safeguard
-                return new PagedResult<RecycleListing>([],0, page, pageSize);
+                return new PagedResult<RecycleListing>([], 0, page, pageSize);
             }
 
             var total = await unionQuery.CountAsync(ct);
@@ -569,7 +569,7 @@ namespace PantmigService.Services
                 .Include(l => l.City)
                 .Include(l => l.Items)
                 .Include(l => l.Images)
-                .Skip((page -1) * pageSize)
+                .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToListAsync(ct);
 

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.TestHost;
 using System.Net;
 using System.Net.Http.Json;
 using AuthService.Models;
@@ -24,7 +25,8 @@ public class AccountManagementEndpointsTests
     [Fact]
     public async Task ChangePassword_RotatesTokens()
     {
-        using var server = AuthTestServer.Create(); using var client = server.CreateClient();
+        using var host = AuthTestServer.Create();
+        using var client = host.GetTestClient();
         var reg = await Register(client, $"user{Guid.NewGuid():N}@example.com");
         var access1 = reg.AuthResponse!.AccessToken; var refresh1 = reg.AuthResponse.RefreshToken;
         var changeReq = new ChangePasswordRequest { OldPassword = "P@ssw0rd!1", NewPassword = "N3wP@ssw0rd!1" };
@@ -36,15 +38,15 @@ public class AccountManagementEndpointsTests
         Assert.NotNull(changeData.AuthResponse);
         Assert.NotEqual(access1, changeData.AuthResponse!.AccessToken);
         Assert.NotEqual(refresh1, changeData.AuthResponse.RefreshToken);
-        var db = server.Services.CreateScope().ServiceProvider.GetRequiredService<AuthService.Data.ApplicationDbContext>();
+        var db = host.Services.CreateScope().ServiceProvider.GetRequiredService<AuthService.Data.ApplicationDbContext>();
         var oldToken = await db.RefreshTokens.FirstAsync(t => t.Token == refresh1); Assert.NotNull(oldToken.Revoked);
     }
 
     [Fact]
     public async Task ChangeEmail_Flows_SendConfirmation()
     {
-        using var server = AuthTestServer.Create();
-        using var client = server.CreateClient();
+        using var host = AuthTestServer.Create();
+        using var client = host.GetTestClient();
         var reg = await Register(client, $"user{Guid.NewGuid():N}@example.com");
         client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", reg.AuthResponse!.AccessToken);
         var newEmail = $"new{Guid.NewGuid():N}@example.com"; var req = new ChangeEmailRequest { NewEmail = newEmail, CurrentPassword = "P@ssw0rd!1" };
@@ -59,7 +61,8 @@ public class AccountManagementEndpointsTests
     [Fact]
     public async Task DisableAccount_Prevents_Login_And_Rotation()
     {
-        using var server = AuthTestServer.Create(); using var client = server.CreateClient();
+        using var host = AuthTestServer.Create();
+        using var client = host.GetTestClient();
         var reg = await Register(client, $"user{Guid.NewGuid():N}@example.com");
         client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", reg.AuthResponse!.AccessToken);
         var disableReq = new DisableAccountRequest { CurrentPassword = "P@ssw0rd!1", Reason = "Testing" };

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.TestHost;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -13,8 +14,8 @@ public class ConfirmationEmailTests
     [Fact]
     public async Task Register_Sends_Confirmation_Email_With_Link()
     {
-        using var server = AuthTestServer.Create();
-        using var client = server.CreateClient();
+        using var host = AuthTestServer.Create();
+        using var client = host.GetTestClient();
 
         var reg = new RegisterRequest
         {
@@ -38,8 +39,8 @@ public class ConfirmationEmailTests
     [Fact]
     public async Task Register_Then_ConfirmEmail_Succeeds_And_Sets_EmailConfirmed()
     {
-        using var server = AuthTestServer.Create();
-        using var client = server.CreateClient();
+        using var host = AuthTestServer.Create();
+        using var client = host.GetTestClient();
 
         var reg = new RegisterRequest
         {

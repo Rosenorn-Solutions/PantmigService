@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.TestHost;
 using PantmigService.Entities;
 using PantmigService.Services;
 using System.Net;
@@ -11,8 +12,8 @@ public class StatisticsEndpointsTests
     [Fact]
     public async Task Donor_Statistics_Returns_Only_Own_Completed_Listings()
     {
-        using var server = TestHostBuilder.CreateServer();
-        using var client = server.CreateClient();
+        using var host = TestHostBuilder.CreateHost();
+        using var client = host.GetTestClient();
 
         // Create 2 listings for donator-1, different items
         client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
@@ -77,8 +78,8 @@ public class StatisticsEndpointsTests
     [Fact]
     public async Task Recycler_Statistics_Breakdown_And_Totals()
     {
-        using var server = TestHostBuilder.CreateServer();
-        using var client = server.CreateClient();
+        using var host = TestHostBuilder.CreateHost();
+        using var client = host.GetTestClient();
 
         // Setup two completed listings both assigned to recycler-1
         client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
@@ -163,8 +164,8 @@ public class StatisticsEndpointsTests
     [Fact]
     public async Task Donor_Statistics_Requires_VerifiedDonator()
     {
-        using var server = TestHostBuilder.CreateServer();
-        using var client = server.CreateClient();
+        using var host = TestHostBuilder.CreateHost();
+        using var client = host.GetTestClient();
 
         // Recycler calling donor stats -> Forbidden
         client.SetTestUser("recycler-1", userType: "Recycler", isMitIdVerified: true);

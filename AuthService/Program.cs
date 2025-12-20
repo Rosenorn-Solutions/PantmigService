@@ -8,7 +8,7 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using Microsoft.OpenApi.Models;
+using Microsoft.AspNetCore.OpenApi;
 using Serilog;
 using Serilog.Core; // added
 using Serilog.Events; // added
@@ -80,88 +80,46 @@ builder.Services.AddAuthentication(options =>
     };
 });
 
-builder.Services.AddAuthorization(options =>
-{
-    options.AddPolicy("VerifiedDonator", policy =>
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy("VerifiedDonator", policy =>
     {
         policy.RequireAuthenticatedUser();
         policy.RequireRole(nameof(UserType.Donator));
     });
-});
 
 builder.Services.AddMemoryCache();
 builder.Services.AddHttpClient();
 builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddOpenApi();
 
-builder.Services.AddSwaggerGen(c =>
+// Cache allowed origins once
+var allowedOrigins = configuration
+    .GetSection("Cors:AllowedOrigins")
+    .GetChildren()
+    .Select(c => c.Value)
+    .Where(v => !string.IsNullOrWhiteSpace(v))
+    .Cast<string>()
+    .ToArray();
+
+if (allowedOrigins.Length == 0)
 {
-    c.SwaggerDoc("v1", new OpenApiInfo { Title = "AuthService API", Version = "v1" });
-    c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
-    {
-        Description = "JWT Authorization header using the Bearer scheme. Enter 'Bearer' + token.",
-        Name = "Authorization",
-        In = ParameterLocation.Header,
-        Type = SecuritySchemeType.ApiKey,
-        Scheme = "Bearer"
-    });
-    c.AddSecurityRequirement(new OpenApiSecurityRequirement
-    {
-        {
-            new OpenApiSecurityScheme
-            {
-                Reference = new OpenApiReference
-                {
-                    Type = ReferenceType.SecurityScheme,
-                    Id = "Bearer"
-                },
-                Scheme = "oauth2",
-                Name = "Bearer",
-                In = ParameterLocation.Header,
-            },
-            new List<string>()
-        }
-    });
-});
-
-// CORS configuration
-var allowedOrigins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
-
-bool IsOriginAllowed(string origin)
-{
-    if (!Uri.TryCreate(origin, UriKind.Absolute, out var o)) return false;
-    foreach (var pattern in allowedOrigins)
-    {
-        if (string.IsNullOrWhiteSpace(pattern)) continue;
-        if (pattern.Contains("*"))
-        {
-            if (pattern.StartsWith("https://*.", StringComparison.OrdinalIgnoreCase))
-            {
-                var domain = pattern.Substring("https://*.".Length);
-                if (string.Equals(o.Scheme, "https", StringComparison.OrdinalIgnoreCase) &&
-                    (string.Equals(o.Host, domain, StringComparison.OrdinalIgnoreCase) ||
-                     o.Host.EndsWith("." + domain, StringComparison.OrdinalIgnoreCase)))
-                {
-                    return true;
-                }
-            }
-            continue;
-        }
-        if (Uri.TryCreate(pattern, UriKind.Absolute, out var p))
-        {
-            var schemeOk = string.Equals(o.Scheme, p.Scheme, StringComparison.OrdinalIgnoreCase);
-            var hostOk = string.Equals(o.Host, p.Host, StringComparison.OrdinalIgnoreCase);
-            var portOk = p.IsDefaultPort || p.Port == -1 || p.Port == o.Port;
-            if (schemeOk && hostOk && portOk) return true;
-        }
-    }
-    return false;
+    allowedOrigins =
+    [
+        "http://localhost:8081",
+        "https://localhost:8081",
+        "http://127.0.0.1:8081",
+        "https://127.0.0.1:8081"
+    ];
 }
 
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("ConfiguredCors", policy =>
+    options.AddPolicy("FrontendCors", policy =>
     {
-        policy.AllowAnyHeader().AllowAnyMethod().SetIsOriginAllowed(IsOriginAllowed);
+        policy.WithOrigins(allowedOrigins)
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
     });
 });
 
@@ -175,14 +133,13 @@ builder.Services.AddScoped<IUserAccountService, UserAccountService>();
 
 var app = builder.Build();
 
-app.UseForwardedHeaders(new ForwardedHeadersOptions
+if (app.Environment.IsDevelopment())
 {
-    ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost
-});
+    app.MapOpenApi();
+}
 
-app.UseCors("ConfiguredCors");
-app.UseSwagger();
-app.UseSwaggerUI();
+app.UseCors("FrontendCors");
+
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();

@@ -1,12 +1,14 @@
-using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using PantmigService;
 using PantmigService.Data;
-using PantmigService.Endpoints;
 using PantmigService.Entities;
 using PantmigService.Services;
+using System.Linq;
 using System.Net.Http.Json;
 
 namespace PantMigTesting.Endpoints;
@@ -23,37 +25,49 @@ public class NewsletterEndpointsTests
         }
     }
 
-    private static (TestServer server, FakeEmailSender emailSender) CreateServer(string? dbName = null)
+    private sealed class NewsletterApiFactory : WebApplicationFactory<PantmigService.Program>
     {
-        var databaseName = dbName ?? Guid.NewGuid().ToString();
-        var fake = new FakeEmailSender();
+        private readonly string _databaseName;
+        public FakeEmailSender EmailSender { get; } = new();
 
-        var builder = new WebHostBuilder()
-            .ConfigureServices(services =>
+        public NewsletterApiFactory(string? databaseName = null)
+        {
+            _databaseName = databaseName ?? Guid.NewGuid().ToString();
+        }
+
+        protected override void ConfigureWebHost(IWebHostBuilder builder)
+        {
+            builder.ConfigureTestServices(services =>
             {
-                services.AddRouting();
-                services.AddDbContext<PantmigDbContext>(opt => opt.UseInMemoryDatabase(databaseName));
-                services.AddSingleton<IEmailSender>(fake);
-            })
-            .Configure(app =>
-            {
-                app.UseRouting();
-                app.UseEndpoints(endpoints =>
+                services.RemoveAll<DbContextOptions<PantmigDbContext>>();
+                services.RemoveAll<PantmigDbContext>();
+                services.RemoveAll<IDbContextFactory<PantmigDbContext>>();
+                services.RemoveAll<IEmailSender>();
+
+                var inMemoryEfProvider = new ServiceCollection()
+                    .AddEntityFrameworkInMemoryDatabase()
+                    .BuildServiceProvider();
+
+                services.AddDbContext<PantmigDbContext>((_, opt) =>
                 {
-                    endpoints.MapNewsletterEndpoints();
-                    endpoints.MapNewsletterUnsubscribe();
+                    opt.UseInMemoryDatabase(_databaseName);
+                    opt.UseInternalServiceProvider(inMemoryEfProvider);
                 });
-            });
+                services.AddSingleton<IEmailSender>(EmailSender);
 
-        return (new TestServer(builder), fake);
+                using var scope = services.BuildServiceProvider().CreateScope();
+                var db = scope.ServiceProvider.GetRequiredService<PantmigDbContext>();
+                db.Database.EnsureCreated();
+            });
+        }
     }
 
     [Fact]
     public async Task Subscribe_Works_And_Sends_Email()
     {
-        var (server, emailSender) = CreateServer();
-        using var _ = server; // dispose at end of test
-        using var client = server.CreateClient();
+        using var factory = new NewsletterApiFactory();
+        var emailSender = factory.EmailSender;
+        using var client = factory.CreateClient();
 
         var resp = await client.PostAsJsonAsync("/newsletter/subscribe", new { Name = "Jane Doe", Email = "jane@example.com" });
         resp.EnsureSuccessStatusCode();
@@ -61,8 +75,7 @@ public class NewsletterEndpointsTests
         Assert.NotNull(payload);
         Assert.True(payload!.Success);
 
-        // Verify persisted
-        using (var scope = server.Services.CreateScope())
+        using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<PantmigDbContext>();
             var sub = await db.NewsletterSubscriptions.FirstOrDefaultAsync();
@@ -71,7 +84,6 @@ public class NewsletterEndpointsTests
             Assert.Equal("Jane Doe", sub.Name);
         }
 
-        // Verify email was sent
         Assert.Single(emailSender.Sent);
         Assert.Equal("jane@example.com", emailSender.Sent[0].to);
     }
@@ -79,38 +91,34 @@ public class NewsletterEndpointsTests
     [Fact]
     public async Task Unsubscribe_Removes_Subscription_Idempotent()
     {
-        var (server, emailSender) = CreateServer();
-        using var _ = server;
+        using var factory = new NewsletterApiFactory();
+        var emailSender = factory.EmailSender;
 
-        // Seed a subscription
-        using (var scope = server.Services.CreateScope())
+        using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<PantmigDbContext>();
             db.NewsletterSubscriptions.Add(new NewsletterSubscription { Name = "John", Email = "john@example.com", CreatedAt = DateTime.UtcNow });
             await db.SaveChangesAsync();
         }
 
-        using var client = server.CreateClient();
+        using var client = factory.CreateClient();
         var resp = await client.PostAsJsonAsync("/newsletter/unsubscribe", new { Email = "john@example.com" });
         resp.EnsureSuccessStatusCode();
         var payload = await resp.Content.ReadFromJsonAsync<ResponseDto>();
         Assert.NotNull(payload);
         Assert.True(payload!.Success);
 
-        // Verify removal
-        using (var scope = server.Services.CreateScope())
+        using (var scope = factory.Services.CreateScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<PantmigDbContext>();
             Assert.Equal(0, await db.NewsletterSubscriptions.CountAsync());
         }
 
-        // Idempotent second call
         var resp2 = await client.PostAsJsonAsync("/newsletter/unsubscribe", new { Email = "john@example.com" });
         resp2.EnsureSuccessStatusCode();
         var payload2 = await resp2.Content.ReadFromJsonAsync<ResponseDto>();
         Assert.True(payload2!.Success);
 
-        // No email sent on unsubscribe
         Assert.Empty(emailSender.Sent);
     }
 

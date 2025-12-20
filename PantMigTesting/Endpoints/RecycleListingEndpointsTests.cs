@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Microsoft.Extensions.Hosting;
 using PantmigService.Data;
 using PantmigService.Endpoints;
 using PantmigService.Endpoints.Helpers;
@@ -72,76 +73,75 @@ namespace PantMigTesting.Endpoints
             public Task<IReadOnlyList<Notification>> GetRecentAsync(string userId, int take = 50, CancellationToken ct = default)
                 => Task.FromResult<IReadOnlyList<Notification>>(Array.Empty<Notification>());
         }
-        public static TestServer CreateServer(string? dbName = null)
+        public static IHost CreateHost(string? dbName = null)
         {
 
             // Ensure the in-memory database name is constant for the lifetime of this server instance.
             var databaseName = dbName ?? Guid.NewGuid().ToString();
 
-            var builder = new WebHostBuilder()
-                .ConfigureServices(services =>
+            var hostBuilder = new HostBuilder()
+                .ConfigureWebHost(webHost =>
                 {
-                    services.AddRouting();
-
-                    services.AddAuthentication(o =>
+                    webHost.UseTestServer();
+                    webHost.ConfigureServices(services =>
                     {
-                        o.DefaultAuthenticateScheme = TestAuthHandler.SchemeName;
-                        o.DefaultChallengeScheme = TestAuthHandler.SchemeName;
-                    }).AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(TestAuthHandler.SchemeName, _ => { });
+                        services.AddRouting();
 
-                    services.AddAuthorization(options =>
-                    {
-                        options.AddPolicy("VerifiedDonator", policy =>
+                        services.AddAuthentication(o =>
                         {
-                            policy.RequireAuthenticatedUser();
-                            policy.RequireAssertion(ctx =>
+                            o.DefaultAuthenticateScheme = TestAuthHandler.SchemeName;
+                            o.DefaultChallengeScheme = TestAuthHandler.SchemeName;
+                        }).AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(TestAuthHandler.SchemeName, _ => { });
+
+                        services.AddAuthorization(options =>
+                        {
+                            options.AddPolicy("VerifiedDonator", policy =>
                             {
-                                var type = ctx.User.FindFirst("userType")?.Value;
-                                var verified = ctx.User.FindFirst("isMitIdVerified")?.Value;
-                                return string.Equals(type, "Donator", StringComparison.OrdinalIgnoreCase)
-                                       && string.Equals(verified, bool.TrueString, StringComparison.OrdinalIgnoreCase);
+                                policy.RequireAuthenticatedUser();
+                                policy.RequireAssertion(ctx =>
+                                {
+                                    var type = ctx.User.FindFirst("userType")?.Value;
+                                    var verified = ctx.User.FindFirst("isMitIdVerified")?.Value;
+                                    return string.Equals(type, "Donator", StringComparison.OrdinalIgnoreCase)
+                                           && string.Equals(verified, bool.TrueString, StringComparison.OrdinalIgnoreCase);
+                                });
                             });
                         });
+
+                        services.AddDbContext<PantmigDbContext>(opt =>
+                            opt.UseInMemoryDatabase(databaseName));
+                        services.AddScoped<IRecycleListingService, RecycleListingService>();
+                        services.AddScoped<ICityResolver, CityResolver>();
+                        services.AddScoped<IRecycleListingValidationService, RecycleListingValidationService>();
+                        services.AddScoped<IFileValidationService, FileValidationService>();
+                        services.AddScoped<IChatValidationService, ChatValidationService>();
+                        services.AddScoped<ICreateListingRequestParser, CreateListingRequestParser>();
+                        services.AddScoped<IStatisticsService, StatisticsService>();
+                        services.AddScoped<INotificationService, TestNotifications>();
+
+                        services.AddSingleton<IAntivirusScanner, NoOpAntivirusScanner>();
+                        services.AddMemoryCache();
+                        services.ConfigureHttpJsonOptions(o =>
+                        {
+                            o.SerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
+                        });
                     });
-
-                    services.AddDbContext<PantmigDbContext>(opt =>
-                        opt.UseInMemoryDatabase(databaseName));
-                    services.AddScoped<IRecycleListingService, RecycleListingService>();
-                    services.AddScoped<ICityResolver, CityResolver>();
-                    services.AddScoped<IRecycleListingValidationService, RecycleListingValidationService>();
-                    services.AddScoped<IFileValidationService, FileValidationService>();
-                    services.AddScoped<IChatValidationService, ChatValidationService>();
-                    services.AddScoped<ICreateListingRequestParser, CreateListingRequestParser>();
-                    services.AddScoped<IStatisticsService, StatisticsService>();
-                    services.AddScoped<INotificationService, TestNotifications>();
-
-                    // Register a no-op antivirus scanner for tests
-                    services.AddSingleton<IAntivirusScanner, NoOpAntivirusScanner>();
-
-                    // Add memory cache required by RecycleListingService
-                    services.AddMemoryCache();
-
-                    // Ignore reference cycles introduced by navigation properties (Listing <-> Items)
-                    services.ConfigureHttpJsonOptions(o =>
+                    webHost.Configure(app =>
                     {
-                        o.SerializerOptions.ReferenceHandler = System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
-                    });
-                })
-                .Configure(app =>
-                {
-                    app.UseRouting();
-                    app.UseAuthentication();
-                    app.UseAuthorization();
-                    app.UseEndpoints(endpoints =>
-                    {
-                        endpoints.MapRecycleListingEndpoints();
-                        endpoints.MapStatisticsEndpoints();
+                        app.UseRouting();
+                        app.UseAuthentication();
+                        app.UseAuthorization();
+                        app.UseEndpoints(endpoints =>
+                        {
+                            endpoints.MapRecycleListingEndpoints();
+                            endpoints.MapStatisticsEndpoints();
+                        });
                     });
                 });
 
-            var server = new TestServer(builder);
+            var host = hostBuilder.Start();
             // Seed cities required for tests
-            using (var scope = server.Services.CreateScope())
+            using (var scope = host.Services.CreateScope())
             {
                 var db = scope.ServiceProvider.GetRequiredService<PantmigDbContext>();
                 if (!db.Cities.Any())
@@ -151,7 +151,7 @@ namespace PantMigTesting.Endpoints
                     db.SaveChanges();
                 }
             }
-            return server;
+            return host;
         }
     }
 
@@ -178,8 +178,8 @@ namespace PantMigTesting.Endpoints
         [Fact]
         public async Task Create_Requires_VerifiedDonator()
         {
-            using var server = TestHostBuilder.CreateServer();
-            using var client = server.CreateClient();
+            using var host = TestHostBuilder.CreateHost();
+            using var client = host.GetTestClient();
 
             client.SetTestUser("recycler-1", userType: "Recycler", isMitIdVerified: true);
             var badResp = await client.PostAsJsonAsync("/listings", new
@@ -217,8 +217,8 @@ namespace PantMigTesting.Endpoints
         [Fact]
         public async Task EndToEnd_Endpoints_Flow_Works_With_Donator_Confirm_Completing()
         {
-            using var server = TestHostBuilder.CreateServer();
-            using var client = server.CreateClient();
+            using var host = TestHostBuilder.CreateHost();
+            using var client = host.GetTestClient();
 
             client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
             var createResp = await client.PostAsJsonAsync("/listings", new
@@ -275,8 +275,8 @@ namespace PantMigTesting.Endpoints
         [Fact]
         public async Task Applicants_Get_Authorization_And_Ownership()
         {
-            using var server = TestHostBuilder.CreateServer();
-            using var client = server.CreateClient();
+            using var host = TestHostBuilder.CreateHost();
+            using var client = host.GetTestClient();
 
             // Create listing as donator-1
             client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
@@ -316,8 +316,8 @@ namespace PantMigTesting.Endpoints
         [Fact]
         public async Task Cancel_Endpoint_Behavior()
         {
-            using var server = TestHostBuilder.CreateServer();
-            using var client = server.CreateClient();
+            using var host = TestHostBuilder.CreateHost();
+            using var client = host.GetTestClient();
 
             // Create listing as donator-1
             client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
@@ -368,8 +368,8 @@ namespace PantMigTesting.Endpoints
         [Fact]
         public async Task Search_Endpoint_Filters_By_City_And_OnlyActive_Defaults_To_True()
         {
-            using var server = TestHostBuilder.CreateServer();
-            using var client = server.CreateClient();
+            using var host = TestHostBuilder.CreateHost();
+            using var client = host.GetTestClient();
 
             // Create three listings in city1 with different states + one in city2
             client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
@@ -416,8 +416,8 @@ namespace PantMigTesting.Endpoints
         [Fact]
         public async Task Search_Endpoint_Includes_All_Statuses_When_OnlyActive_False()
         {
-            using var server = TestHostBuilder.CreateServer();
-            using var client = server.CreateClient();
+            using var host = TestHostBuilder.CreateHost();
+            using var client = host.GetTestClient();
 
             // Create two listings in city1 and cancel one
             client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
@@ -444,8 +444,8 @@ namespace PantMigTesting.Endpoints
         [Fact]
         public async Task Search_Endpoint_Excludes_Listings_Already_Applied_By_User()
         {
-            using var server = TestHostBuilder.CreateServer();
-            using var client = server.CreateClient();
+            using var host = TestHostBuilder.CreateHost();
+            using var client = host.GetTestClient();
 
             // Create two listings in same city
             client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
@@ -473,8 +473,8 @@ namespace PantMigTesting.Endpoints
         [Fact]
         public async Task Create_With_Initial_Coordinates_Sets_Meeting_Fields()
         {
-            using var server = TestHostBuilder.CreateServer();
-            using var client = server.CreateClient();
+            using var host = TestHostBuilder.CreateHost();
+            using var client = host.GetTestClient();
 
             client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
             var createResp = await client.PostAsJsonAsync("/listings", new
@@ -499,8 +499,8 @@ namespace PantMigTesting.Endpoints
         [Fact]
         public async Task Search_By_Coordinates_Only_Returns_Within_5km()
         {
-            using var server = TestHostBuilder.CreateServer();
-            using var client = server.CreateClient();
+            using var host = TestHostBuilder.CreateHost();
+            using var client = host.GetTestClient();
             client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
 
             // Create two listings with coordinates: one near, one far
@@ -526,8 +526,8 @@ namespace PantMigTesting.Endpoints
         [Fact]
         public async Task Search_By_City_And_Coordinates_Unions_Results()
         {
-            using var server = TestHostBuilder.CreateServer();
-            using var client = server.CreateClient();
+            using var host = TestHostBuilder.CreateHost();
+            using var client = host.GetTestClient();
             client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
 
             // Create one listing in CPH without coordinates

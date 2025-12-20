@@ -3,6 +3,7 @@ using AuthService.Models;
 using AuthService.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.AspNetCore.TestHost;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net.Http.Json;
 
@@ -35,9 +36,9 @@ public class TokenRefreshTests
     [Fact]
     public async Task Refresh_Rotates_Tokens_And_Revokes_Previous()
     {
-        using var server = AuthTestServer.Create();
-        using var client = server.CreateClient();
-        var db = server.Services.GetRequiredService<ApplicationDbContext>();
+        using var host = AuthTestServer.Create();
+        using var client = host.GetTestClient();
+        var db = host.Services.GetRequiredService<ApplicationDbContext>();
 
         // Register user and capture initial tokens
         var reg = await RegisterTestUser(client, $"user{Guid.NewGuid():N}@example.com");
@@ -70,9 +71,9 @@ public class TokenRefreshTests
     [Fact]
     public async Task Cannot_Reuse_Revoked_Refresh_Token()
     {
-        using var server = AuthTestServer.Create();
-        using var client = server.CreateClient();
-        var db = server.Services.GetRequiredService<ApplicationDbContext>();
+        using var host = AuthTestServer.Create();
+        using var client = host.GetTestClient();
+        var db = host.Services.GetRequiredService<ApplicationDbContext>();
 
         var reg = await RegisterTestUser(client, $"user{Guid.NewGuid():N}@example.com");
         var access1 = reg.AuthResponse!.AccessToken;
@@ -91,7 +92,7 @@ public class TokenRefreshTests
         Assert.Equal(System.Net.HttpStatusCode.BadRequest, failResp.StatusCode);
         var failObj = await failResp.Content.ReadFromJsonAsync<Dictionary<string, string>>();
         Assert.NotNull(failObj);
-        Assert.True(failObj!.Values.Any(v => v.Contains("Invalid"))); // error message contains Invalid or expired
+        Assert.Contains(failObj!.Values, v => v.Contains("Invalid")); // error message contains Invalid or expired
 
         // Rotation with current refresh token still works
         var refreshResp2 = await client.PostAsJsonAsync("/auth/refresh", new TokenRefreshRequest { AccessToken = access2, RefreshToken = refresh2 });
@@ -104,12 +105,12 @@ public class TokenRefreshTests
     [Fact]
     public async Task Refresh_Fails_For_Expired_Token()
     {
-        using var server = AuthTestServer.Create(services =>
+        using var host = AuthTestServer.Create(services =>
         {
             // could override config here if needed
         });
-        using var client = server.CreateClient();
-        var db = server.Services.GetRequiredService<ApplicationDbContext>();
+        using var client = host.GetTestClient();
+        var db = host.Services.GetRequiredService<ApplicationDbContext>();
 
         var reg = await RegisterTestUser(client, $"user{Guid.NewGuid():N}@example.com");
         var refreshTokenValue = reg.AuthResponse!.RefreshToken;
@@ -123,14 +124,14 @@ public class TokenRefreshTests
         Assert.Equal(System.Net.HttpStatusCode.BadRequest, resp.StatusCode);
         var obj = await resp.Content.ReadFromJsonAsync<Dictionary<string, string>>();
         Assert.NotNull(obj);
-        Assert.True(obj!.Values.Any(v => v.Contains("expired")));
+        Assert.Contains(obj!.Values, v => v.Contains("expired"));
     }
 
     [Fact]
     public async Task Claims_Preserved_Across_Rotation()
     {
-        using var server = AuthTestServer.Create();
-        using var client = server.CreateClient();
+        using var host = AuthTestServer.Create();
+        using var client = host.GetTestClient();
 
         var reg = await RegisterTestUser(client, $"user{Guid.NewGuid():N}@example.com", org: true);
         var initialAccess = reg.AuthResponse!.AccessToken;

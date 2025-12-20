@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using PantmigService.Data;
 using PantmigService.Endpoints;
@@ -33,8 +34,8 @@ public class ListingImageCreationTests
     [Fact]
     public async Task Create_Listing_With_Images_Multipart_Works()
     {
-        using var server = TestHostBuilder.CreateServer();
-        using var client = server.CreateClient();
+        using var host = TestHostBuilder.CreateHost();
+        using var client = host.GetTestClient();
 
         client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
 
@@ -76,8 +77,8 @@ public class ListingImageCreationTests
     [Fact]
     public async Task Create_Listing_With_NonImage_File_Fails()
     {
-        using var server = TestHostBuilder.CreateServer();
-        using var client = server.CreateClient();
+        using var host = TestHostBuilder.CreateHost();
+        using var client = host.GetTestClient();
 
         client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
 
@@ -104,55 +105,59 @@ public class ListingImageCreationTests
     public async Task Create_Listing_With_Infected_Image_Is_Blocked_When_AV_Enabled()
     {
         // Simulate ClamAV enabled by substituting real scanner with one that flags infected
-        var builder = new WebHostBuilder()
-            .ConfigureServices(services =>
+        var hostBuilder = new HostBuilder()
+            .ConfigureWebHost(webHost =>
             {
-                services.AddRouting();
-                services.AddAuthentication(o =>
+                webHost.UseTestServer();
+                webHost.ConfigureServices(services =>
                 {
-                    o.DefaultAuthenticateScheme = TestAuthHandler.SchemeName;
-                    o.DefaultChallengeScheme = TestAuthHandler.SchemeName;
-                }).AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(TestAuthHandler.SchemeName, _ => { });
-
-                services.AddAuthorization(options =>
-                {
-                    options.AddPolicy("VerifiedDonator", policy =>
+                    services.AddRouting();
+                    services.AddAuthentication(o =>
                     {
-                        policy.RequireAuthenticatedUser();
-                        policy.RequireAssertion(ctx =>
+                        o.DefaultAuthenticateScheme = TestAuthHandler.SchemeName;
+                        o.DefaultChallengeScheme = TestAuthHandler.SchemeName;
+                    }).AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(TestAuthHandler.SchemeName, _ => { });
+
+                    services.AddAuthorization(options =>
+                    {
+                        options.AddPolicy("VerifiedDonator", policy =>
                         {
-                            var type = ctx.User.FindFirst("userType")?.Value;
-                            var verified = ctx.User.FindFirst("isMitIdVerified")?.Value;
-                            return string.Equals(type, "Donator", StringComparison.OrdinalIgnoreCase)
-                                   && string.Equals(verified, bool.TrueString, StringComparison.OrdinalIgnoreCase);
+                            policy.RequireAuthenticatedUser();
+                            policy.RequireAssertion(ctx =>
+                            {
+                                var type = ctx.User.FindFirst("userType")?.Value;
+                                var verified = ctx.User.FindFirst("isMitIdVerified")?.Value;
+                                return string.Equals(type, "Donator", StringComparison.OrdinalIgnoreCase)
+                                       && string.Equals(verified, bool.TrueString, StringComparison.OrdinalIgnoreCase);
+                            });
                         });
                     });
-                });
 
-                services.AddDbContext<PantmigDbContext>(opt => opt.UseInMemoryDatabase(Guid.NewGuid().ToString()));
-                services.AddScoped<INotificationService, TestNotifications>();
-                services.AddScoped<IRecycleListingService, RecycleListingService>();
-                services.AddScoped<ICityResolver, CityResolver>();
-                services.AddScoped<IRecycleListingValidationService, RecycleListingValidationService>();
-                services.AddScoped<IFileValidationService, FileValidationService>();
-                services.AddScoped<IChatValidationService, ChatValidationService>();
-                services.AddScoped<ICreateListingRequestParser, CreateListingRequestParser>();
-                services.AddSingleton<IAntivirusScanner>(new FakeInfectedScanner());
-                services.AddMemoryCache();
-            })
-            .Configure(app =>
-            {
-                app.UseRouting();
-                app.UseAuthentication();
-                app.UseAuthorization();
-                app.UseEndpoints(endpoints =>
+                    services.AddDbContext<PantmigDbContext>(opt => opt.UseInMemoryDatabase(Guid.NewGuid().ToString()));
+                    services.AddScoped<INotificationService, TestNotifications>();
+                    services.AddScoped<IRecycleListingService, RecycleListingService>();
+                    services.AddScoped<ICityResolver, CityResolver>();
+                    services.AddScoped<IRecycleListingValidationService, RecycleListingValidationService>();
+                    services.AddScoped<IFileValidationService, FileValidationService>();
+                    services.AddScoped<IChatValidationService, ChatValidationService>();
+                    services.AddScoped<ICreateListingRequestParser, CreateListingRequestParser>();
+                    services.AddSingleton<IAntivirusScanner>(new FakeInfectedScanner());
+                    services.AddMemoryCache();
+                });
+                webHost.Configure(app =>
                 {
-                    endpoints.MapRecycleListingEndpoints();
+                    app.UseRouting();
+                    app.UseAuthentication();
+                    app.UseAuthorization();
+                    app.UseEndpoints(endpoints =>
+                    {
+                        endpoints.MapRecycleListingEndpoints();
+                    });
                 });
             });
 
-        using var server = new TestServer(builder);
-        using var client = server.CreateClient();
+        using var host = hostBuilder.Start();
+        using var client = host.GetTestClient();
         client.SetTestUser("donator-1", userType: "Donator", isMitIdVerified: true);
 
         using var form = new MultipartFormDataContent();

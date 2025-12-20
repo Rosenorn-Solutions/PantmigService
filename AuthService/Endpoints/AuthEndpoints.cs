@@ -30,13 +30,9 @@ namespace AuthService.Endpoints
                 var taken = await userManager.Users.AnyAsync(u => u.NormalizedEmail == normalized, ct);
                 return Results.Ok(new AvailabilityResult { Taken = taken });
             })
-            .WithOpenApi(op =>
-            {
-                op.OperationId = "Auth_CheckEmail";
-                op.Summary = "Check if email is already taken";
-                op.Description = "Returns whether a user with the provided email already exists.";
-                return op;
-            })
+            .WithName("Auth_CheckEmail")
+            .WithDescription("Returns whether a user with the provided email already exists.")
+            .WithSummary("Check if email is already taken")
             .Produces<AvailabilityResult>(StatusCodes.Status200OK, contentType: "application/json")
             .Produces(StatusCodes.Status400BadRequest);
 
@@ -49,13 +45,9 @@ namespace AuthService.Endpoints
                 var taken = await userManager.Users.AnyAsync(u => u.PhoneNumber != null && u.PhoneNumber == normalized, ct);
                 return Results.Ok(new AvailabilityResult { Taken = taken });
             })
-            .WithOpenApi(op =>
-            {
-                op.OperationId = "Auth_CheckPhone";
-                op.Summary = "Check if phone number is already taken";
-                op.Description = "Returns whether a user with the provided phone number already exists.";
-                return op;
-            })
+            .WithName("Auth_CheckPhone")
+            .WithSummary("Check if phone number is already taken")
+            .WithDescription("Returns whether a user with the provided phone number already exists.")
             .Produces<AvailabilityResult>(StatusCodes.Status200OK, contentType: "application/json")
             .Produces(StatusCodes.Status400BadRequest);
 
@@ -146,17 +138,14 @@ namespace AuthService.Endpoints
                 }
                 catch
                 {
+                    //log
                 }
                 return Results.Ok(new RegisterResult { Success = true, AuthResponse = resp });
             })
             .Accepts<RegisterRequest>("application/json")
-            .WithOpenApi(op =>
-            {
-                op.OperationId = "Auth_Register";
-                op.Summary = "Register a new user";
-                op.Description = "Creates a new user account and returns access and refresh tokens.";
-                return op;
-            })
+            .WithName("Auth_Register")
+            .WithSummary("Register a new user")
+            .WithDescription("Creates a new user account and returns access and refresh tokens.")
             .Produces<RegisterResult>(StatusCodes.Status200OK, contentType: "application/json")
             .Produces<RegisterResult>(StatusCodes.Status400BadRequest, contentType: "application/json");
 
@@ -191,13 +180,9 @@ namespace AuthService.Endpoints
                 return Results.Ok(new LoginResult { Success = true, AuthResponse = resp });
             })
             .Accepts<LoginRequest>("application/json")
-            .WithOpenApi(op =>
-            {
-                op.OperationId = "Auth_Login";
-                op.Summary = "Login with email/username and password";
-                op.Description = "Authenticates a user with either email or username and returns access and refresh tokens.";
-                return op;
-            })
+            .WithName("Auth_Login")
+            .WithSummary("Login with email/username and password")
+            .WithDescription("Authenticates a user with either email or username and returns access and refresh tokens.")
             .Produces<LoginResult>(StatusCodes.Status200OK, contentType: "application/json")
             .Produces(StatusCodes.Status401Unauthorized);
 
@@ -207,13 +192,9 @@ namespace AuthService.Endpoints
                 return resp is not null ? Results.Ok(resp) : Results.BadRequest(new { error });
             })
             .Accepts<TokenRefreshRequest>("application/json")
-            .WithOpenApi(op =>
-            {
-                op.OperationId = "Auth_Refresh";
-                op.Summary = "Refresh access token";
-                op.Description = "Rotates the refresh token and issues a new access token.";
-                return op;
-            })
+            .WithName("Auth_Refresh")
+            .WithSummary("Refresh access token")
+            .WithDescription("\"Rotates the refresh token and issues a new access token.\"")
             .Produces<AuthResponse>(StatusCodes.Status200OK, contentType: "application/json")
             .Produces(StatusCodes.Status400BadRequest);
 
@@ -244,13 +225,9 @@ namespace AuthService.Endpoints
                     return Results.BadRequest($"Invalid token format: {ex.Message}");
                 }
             })
-            .WithOpenApi(op =>
-            {
-                op.OperationId = "Auth_ConfirmEmail";
-                op.Summary = "Confirm user email";
-                op.Description = "Verifies the email confirmation token and marks the user's email as confirmed.";
-                return op;
-            })
+            .WithName("Auth_ConfirmEmail")
+            .WithSummary("Confirm user email")
+            .WithDescription("Verifies the email confirmation token and marks the user's email as confirmed.")
             .Produces(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status400BadRequest);
 
@@ -310,13 +287,9 @@ namespace AuthService.Endpoints
                 return Results.Ok(dto);
             })
             .RequireAuthorization()
-            .WithOpenApi(op =>
-            {
-                op.OperationId = "Auth_Me";
-                op.Summary = "Get current user info";
-                op.Description = "Returns basic profile information for the authenticated user.";
-                return op;
-            })
+            .WithName("Auth_Me")
+            .WithSummary("Get current user info")
+            .WithDescription("Returns basic profile information for the authenticated user.")
             .Produces<UserInformationDTO>(StatusCodes.Status200OK, contentType: "application/json")
             .Produces(StatusCodes.Status401Unauthorized);
 
@@ -346,13 +319,9 @@ namespace AuthService.Endpoints
                 };
                 return Results.Ok(new UserInformationResult { Success = true, UserInformation = dto });
             })
-            .WithOpenApi(op =>
-            {
-                op.OperationId = "Auth_GetUserById";
-                op.Summary = "Get user info by id";
-                op.Description = "Returns public profile information for a user, including rating.";
-                return op;
-            })
+            .WithName("Auth_GetUserById")
+            .WithSummary("Get user info by id")
+            .WithDescription("Returns public profile information for a user, including rating.")
             .Produces<UserInformationResult>(StatusCodes.Status200OK, contentType: "application/json")
             .Produces(StatusCodes.Status404NotFound);
 
@@ -409,13 +378,9 @@ namespace AuthService.Endpoints
                 return Results.Ok(new UsersLookupResult { Success = true, Users = users });
             })
             .Accepts<UsersLookupRequest>("application/json")
-            .WithOpenApi(op =>
-            {
-                op.OperationId = "Auth_UsersLookup";
-                op.Summary = "Batch lookup users' ratings";
-                op.Description = "Returns ratings for a list of user ids to reduce round-trips. Uses in-memory cache for faster responses.";
-                return op;
-            })
+            .WithName("Auth_UsersLookup")
+            .WithSummary("Batch lookup users' ratings")
+            .WithDescription("Returns ratings for a list of user ids to reduce round-trips. Uses in-memory cache for faster responses.")
             .Produces<UsersLookupResult>(StatusCodes.Status200OK, contentType: "application/json");
 
             // New secured account management endpoints
@@ -428,7 +393,9 @@ namespace AuthService.Endpoints
                 return Results.Ok(result);
             })
             .RequireAuthorization()
-            .WithOpenApi(op => { op.OperationId = "Auth_ChangePassword"; op.Summary = "Change password"; op.Description = "Changes the authenticated user's password and rotates tokens."; return op; })
+            .WithName("Auth_ChangePassword")
+            .WithSummary("Change password")
+            .WithDescription("Changes the authenticated user's password and rotates tokens.")
             .Produces<ChangePasswordResult>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized);
@@ -441,7 +408,9 @@ namespace AuthService.Endpoints
                 return Results.Ok(result);
             })
             .RequireAuthorization()
-            .WithOpenApi(op => { op.OperationId = "Auth_ChangeEmail"; op.Summary = "Request email change"; op.Description = "Initiates email change by sending a confirmation link to the new address."; return op; })
+            .WithName("Auth_ChangeEmail")
+            .WithSummary("Request email change")
+            .WithDescription("Initiates email change by sending a confirmation link to the new address.")
             .Produces<ChangeEmailResult>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized);
@@ -451,7 +420,9 @@ namespace AuthService.Endpoints
                 if (!result.Success) return Results.BadRequest(result.ErrorMessage ?? "Failed");
                 return Results.Text("Email change confirmed.", "text/plain");
             })
-            .WithOpenApi(op => { op.OperationId = "Auth_ConfirmEmailChange"; op.Summary = "Confirm email change"; op.Description = "Finalizes email change using token sent to new address."; return op; })
+            .WithName("Auth_ConfirmEmailChange")
+            .WithSummary("Confirm email change")
+            .WithDescription("Finalizes email change using token sent to new address.")
             .Produces(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status400BadRequest);
             group.MapPost("/disable-account", async (DisableAccountRequest req, ClaimsPrincipal principal, IUserAccountService accountService) =>
@@ -463,7 +434,9 @@ namespace AuthService.Endpoints
                 return Results.Ok(result);
             })
             .RequireAuthorization()
-            .WithOpenApi(op => { op.OperationId = "Auth_DisableAccount"; op.Summary = "Disable account"; op.Description = "Marks the authenticated user's account as disabled and revokes active tokens."; return op; })
+            .WithName("Auth_DisableAccount")
+            .WithSummary("Disable account")
+            .WithDescription("Marks the authenticated user's account as disabled and revokes active tokens.")
             .Produces<OperationResult>(StatusCodes.Status200OK)
             .Produces(StatusCodes.Status400BadRequest)
             .Produces(StatusCodes.Status401Unauthorized);

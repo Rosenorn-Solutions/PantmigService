@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.TestHost;
 using AuthService.Models;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net.Http.Headers;
@@ -10,8 +11,8 @@ public class OrganizationUserTests
     [Fact]
     public async Task Register_Login_Token_Contain_IsOrganization()
     {
-        using var server = AuthTestServer.Create();
-        using var client = server.CreateClient();
+        using var host = AuthTestServer.Create();
+        using var client = host.GetTestClient();
 
         // 1) Register an organization account
         var reg = new RegisterRequest
@@ -70,8 +71,8 @@ public class OrganizationUserTests
     [Fact]
     public async Task NonOrganization_User_Should_Have_IsOrganization_False()
     {
-        using var server = AuthTestServer.Create();
-        using var client = server.CreateClient();
+        using var host = AuthTestServer.Create();
+        using var client = host.GetTestClient();
 
         var reg = new RegisterRequest
         {
