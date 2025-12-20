@@ -87,6 +87,7 @@ jobs:
           host: ${{ vars.SERVER_NAME }}
           username: ${{ vars.SERVER_USER }}
           key: ${{ secrets.SERVER_ROOT_CERTIFICATE }}
+          passphrase: ${{ secrets.SERVER_ROOT_CERTIFICATE_PASSWORD }}
           source: "./PantmigService-artifact/*"
           target: "/var/www/pantmig/api/publish"
           strip_components: 1
@@ -97,6 +98,7 @@ jobs:
           host: ${{ vars.SERVER_NAME }}
           username: ${{ vars.SERVER_USER }}
           key: ${{ secrets.SERVER_ROOT_CERTIFICATE }}
+          passphrase: ${{ secrets.SERVER_ROOT_CERTIFICATE_PASSWORD }}
           source: "./AuthService-artifact/*"
           target: "/var/www/pantmig/auth/publish"
           strip_components: 1
@@ -107,6 +109,7 @@ jobs:
           host: ${{ vars.SERVER_NAME }}
           username: ${{ vars.SERVER_USER }}
           key: ${{ secrets.SERVER_ROOT_CERTIFICATE }}
+          passphrase: ${{ secrets.SERVER_ROOT_CERTIFICATE_PASSWORD }}
           script: |
             echo "Deployment completed on $(date)";
             echo "Restarting Pantmig API service";
