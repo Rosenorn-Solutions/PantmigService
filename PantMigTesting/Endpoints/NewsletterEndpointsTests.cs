@@ -39,22 +39,20 @@ public class NewsletterEndpointsTests
         {
             builder.ConfigureTestServices(services =>
             {
-                var dbContextDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(DbContextOptions<PantmigDbContext>));
-                if (dbContextDescriptor is not null)
-                {
-                    services.Remove(dbContextDescriptor);
-                }
-
-                var contextDescriptor = services.SingleOrDefault(d => d.ServiceType == typeof(PantmigDbContext));
-                if (contextDescriptor is not null)
-                {
-                    services.Remove(contextDescriptor);
-                }
-
+                services.RemoveAll<DbContextOptions<PantmigDbContext>>();
+                services.RemoveAll<PantmigDbContext>();
+                services.RemoveAll<IDbContextFactory<PantmigDbContext>>();
                 services.RemoveAll<IEmailSender>();
 
-                services.AddDbContext<PantmigDbContext>(opt =>
-                    opt.UseInMemoryDatabase(_databaseName));
+                var inMemoryEfProvider = new ServiceCollection()
+                    .AddEntityFrameworkInMemoryDatabase()
+                    .BuildServiceProvider();
+
+                services.AddDbContext<PantmigDbContext>((_, opt) =>
+                {
+                    opt.UseInMemoryDatabase(_databaseName);
+                    opt.UseInternalServiceProvider(inMemoryEfProvider);
+                });
                 services.AddSingleton<IEmailSender>(EmailSender);
 
                 using var scope = services.BuildServiceProvider().CreateScope();
