@@ -112,13 +112,13 @@ namespace AuthService.Services
             {
                 var idUpper = identifier.ToUpperInvariant();
                 user = await userManager.Users.Include(u => u.City)
-                    .FirstOrDefaultAsync(u => u.Email != null && u.Email.ToUpperInvariant() == idUpper, ct);
+                    .FirstOrDefaultAsync(u => u.Email != null && u.Email.ToUpper() == idUpper, ct);
             }
             if (user is null)
             {
                 var idUpper = identifier.ToUpperInvariant();
                 user = await userManager.Users.Include(u => u.City)
-                    .FirstOrDefaultAsync(u => u.UserName != null && u.UserName.ToUpperInvariant() == idUpper, ct);
+                    .FirstOrDefaultAsync(u => u.UserName != null && u.UserName.ToUpper() == idUpper, ct);
             }
 
             if (user == null || user.IsDisabled)

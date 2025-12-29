@@ -134,7 +134,9 @@ namespace AuthService.Endpoints
 
                     var subject = "Bekræft din e-mail til PantMig";
                     var body = $"Hej {user.FirstName},\n\nTak for din registrering. Bekræft venligst din e-mail ved at klikke på linket:\n{confirmUrl}\n\nHvis du ikke har oprettet en konto, kan du ignorere denne mail.";
-                    await emailSender.SendAsync(user.Email!, subject, body, httpCtx.RequestAborted);
+                    //fire and forget
+                    _ = emailSender.SendAsync(user.Email!, subject, body, httpCtx.RequestAborted)
+                        .ContinueWith(t => { var _ = t.Exception; }, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously);
                 }
                 catch
                 {
