@@ -130,6 +130,7 @@ namespace PantmigService.Services
 
             _logger.LogDebug("Fetching listings for user {UserId}", userId);
             var list = await _db.RecycleListings.AsNoTracking()
+                .AsSplitQuery()
                 .Where(x => x.CreatedByUserId == userId)
                 .OrderByDescending(x => x.CreatedAt)
                 .Include(l => l.City)
